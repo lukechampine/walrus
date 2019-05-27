@@ -1,13 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
+	"github.com/pkg/errors"
 	"gitlab.com/NebulousLabs/Sia/build"
 	"gitlab.com/NebulousLabs/Sia/modules/consensus"
 	"gitlab.com/NebulousLabs/Sia/modules/gateway"
@@ -186,6 +189,21 @@ func main() {
 		}
 		vanity(getSeed(), args[0])
 	}
+}
+
+func gen(seed wallet.Seed, indexStr string) error {
+	index, err := strconv.ParseUint(indexStr, 10, 64)
+	if err != nil {
+		return errors.Wrap(err, "invalid key index")
+	}
+	info := wallet.SeedAddressInfo{
+		UnlockConditions: wallet.StandardUnlockConditions(seed.PublicKey(index)),
+		KeyIndex:         index,
+	}
+	js, _ := json.MarshalIndent(walrus.ResponseAddressesAddr(info), "", "\t")
+	fmt.Println(info.UnlockConditions.UnlockHash())
+	fmt.Println(string(js))
+	return nil
 }
 
 func start(seed wallet.Seed, dir string, APIaddr string) error {
