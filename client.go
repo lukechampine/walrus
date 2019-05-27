@@ -122,22 +122,25 @@ func (c *genericClient) SetMemo(txid types.TransactionID, memo []byte) (err erro
 	return nil
 }
 
+// Transactions
 func (c *genericClient) Transactions(max int) (txids []types.TransactionID, err error) {
 	err = c.get("/transactions?max="+strconv.Itoa(max), &txids)
 	return
 }
 
+// TransactionsByAddress
 func (c *genericClient) TransactionsByAddress(addr types.UnlockHash, max int) (txids []types.TransactionID, err error) {
 	err = c.get("/transactions?max="+strconv.Itoa(max)+"&addr="+addr.String(), &txids)
 	return
 }
 
+// Transaction
 func (c *genericClient) Transaction(txid types.TransactionID) (txn ResponseTransactionsID, err error) {
 	err = c.get("/transactions/"+txid.String(), &txn)
 	return
 }
 
-func (c *genericClient) UnspentOutputs() (utxos []SeedUTXO, err error) {
+func (c *genericClient) UnspentOutputs() (utxos []UTXO, err error) {
 	err = c.get("/utxos", &utxos)
 	return
 }

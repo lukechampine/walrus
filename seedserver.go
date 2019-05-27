@@ -224,11 +224,17 @@ func (s *seedServer) utxosHandler(w http.ResponseWriter, req *http.Request, _ ht
 	inputs := s.w.ValuedInputs()
 	utxos := make([]UTXO, len(inputs))
 	for i, vi := range inputs {
+		addr := vi.UnlockConditions.UnlockHash()
+		info, ok := s.w.AddressInfo(addr)
+		if !ok {
+			panic("missing info for " + addr.String())
+		}
 		utxos[i] = UTXO{
 			ID:               vi.ParentID,
 			Value:            vi.Value,
 			UnlockConditions: vi.UnlockConditions,
-			UnlockHash:       vi.UnlockConditions.UnlockHash(),
+			UnlockHash:       addr,
+			KeyIndex:         info.KeyIndex,
 		}
 	}
 	writeJSON(w, utxos)

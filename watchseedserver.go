@@ -220,20 +220,18 @@ func (s *watchSeedServer) transactionsidHandler(w http.ResponseWriter, req *http
 
 func (s *watchSeedServer) utxosHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	outputs := s.w.UnspentOutputs()
-	utxos := make([]SeedUTXO, len(outputs))
+	utxos := make([]UTXO, len(outputs))
 	for i, o := range outputs {
 		info, ok := s.getInfo(o.UnlockHash)
 		if !ok {
 			panic("missing info for " + o.UnlockHash.String())
 		}
-		utxos[i] = SeedUTXO{
-			UTXO: UTXO{
-				ID:               o.ID,
-				Value:            o.Value,
-				UnlockConditions: info.UnlockConditions,
-				UnlockHash:       o.UnlockHash,
-			},
-			KeyIndex: info.KeyIndex,
+		utxos[i] = UTXO{
+			ID:               o.ID,
+			Value:            o.Value,
+			UnlockConditions: info.UnlockConditions,
+			UnlockHash:       o.UnlockHash,
+			KeyIndex:         info.KeyIndex,
 		}
 	}
 	writeJSON(w, utxos)

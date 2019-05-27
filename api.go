@@ -174,16 +174,11 @@ func (r ResponseTransactionsID) MarshalJSON() ([]byte, error) {
 	}{*(*encodedTransaction)(unsafe.Pointer(&r.Transaction)), r.Inflow, r.Outflow, r.FeePerByte})
 }
 
-// A UTXO is an unspent transaction output, ready to be used as a SiacoinInput.
+// A UTXO is an unspent transaction output owned by a seed-derived address.
 type UTXO struct {
 	ID               types.SiacoinOutputID  `json:"ID"`
 	Value            types.Currency         `json:"value"`
 	UnlockConditions types.UnlockConditions `json:"unlockConditions"`
 	UnlockHash       types.UnlockHash       `json:"unlockHash"`
-}
-
-// A SeedUTXO is a UTXO owned by a seed-derived address.
-type SeedUTXO struct {
-	UTXO
-	KeyIndex uint64 `json:"keyIndex"`
+	KeyIndex         uint64                 `json:"keyIndex"`
 }
