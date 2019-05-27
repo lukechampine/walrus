@@ -2,6 +2,8 @@ package walrus
 
 import (
 	"io/ioutil"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -13,6 +15,16 @@ import (
 	"gitlab.com/NebulousLabs/fastrand"
 	"lukechampine.com/us/wallet"
 )
+
+func runWatchSeedServer(h http.Handler) (*WatchSeedClient, func() error) {
+	l, err := net.Listen("tcp", "localhost:9990")
+	if err != nil {
+		panic(err)
+	}
+	srv := http.Server{Handler: h}
+	go srv.Serve(l)
+	return NewWatchSeedClient(l.Addr().String()), srv.Close
+}
 
 func TestWatchSeedServer(t *testing.T) {
 	dir, err := ioutil.TempDir("", t.Name())
@@ -30,26 +42,25 @@ func TestWatchSeedServer(t *testing.T) {
 	cs := new(mockCS)
 	cs.ConsensusSetSubscribe(w, store.ConsensusChangeID(), nil)
 	ss := NewWatchSeedServer(w, stubTpool{})
+	client, stop := runWatchSeedServer(ss)
+	defer stop()
 
 	// initial balance should be zero
-	var balance types.Currency
-	if err := httpGet(ss, "/balance", &balance); err != nil {
+	if balance, err := client.Balance(); err != nil {
 		t.Fatal(err)
 	} else if !balance.IsZero() {
 		t.Fatal("balance should be zero")
 	}
 
 	// shouldn't have any transactions yet
-	var txnHistory []types.TransactionID
-	if err := httpGet(ss, "/transactions", &txnHistory); err != nil {
+	if txnHistory, err := client.Transactions(-1); err != nil {
 		t.Fatal(err)
 	} else if len(txnHistory) != 0 {
 		t.Fatal("transaction history should be empty")
 	}
 
 	// shouldn't have any addresses yet
-	var addresses []types.UnlockHash
-	if err := httpGet(ss, "/addresses", &addresses); err != nil {
+	if addresses, err := client.Addresses(); err != nil {
 		t.Fatal(err)
 	} else if len(addresses) != 0 {
 		t.Fatal("address list should be empty")
@@ -61,16 +72,23 @@ func TestWatchSeedServer(t *testing.T) {
 		UnlockConditions: wallet.StandardUnlockConditions(seed.PublicKey(0)),
 		KeyIndex:         0,
 	}
-	var addr types.UnlockHash
-	if err := httpPost(ss, "/addresses", addrInfo, &addr); err != nil {
+	addr := addrInfo.UnlockConditions.UnlockHash()
+	if err := client.WatchAddress(addrInfo); err != nil {
 		t.Fatal(err)
 	}
 
 	// should have an address now
-	if err := httpGet(ss, "/addresses", &addresses); err != nil {
+	if addresses, err := client.Addresses(); err != nil {
 		t.Fatal(err)
 	} else if len(addresses) != 1 || addresses[0] != addr {
 		t.Fatal("bad address list", addresses)
+	}
+
+	// address info should be present
+	if addrInfo, err := client.AddressInfo(addr); err != nil {
+		t.Fatal(err)
+	} else if addrInfo.KeyIndex != 0 || addrInfo.UnlockConditions.UnlockHash() != addr {
+		t.Fatal("address info is inaccurate")
 	}
 
 	// simulate a transaction
@@ -82,30 +100,28 @@ func TestWatchSeedServer(t *testing.T) {
 	})
 
 	// get new balance
-	if err := httpGet(ss, "/balance", &balance); err != nil {
+	if balance, err := client.Balance(); err != nil {
 		t.Fatal(err)
 	} else if balance.Cmp(types.SiacoinPrecision) != 0 {
 		t.Fatal("balance should be 1 SC")
 	}
 
 	// transaction should appear in history
-	if err := httpGet(ss, "/transactions?max=2&addr="+addr.String(), &txnHistory); err != nil {
+	txnHistory, err := client.Transactions(2)
+	if err != nil {
 		t.Fatal(err)
 	} else if len(txnHistory) != 1 {
 		t.Fatal("transaction should appear in history")
 	}
-	var rtid ResponseTransactionsID
-	if err := httpGet(ss, "/transactions/"+txnHistory[0].String(), &rtid); err != nil {
+	if htx, err := client.Transaction(txnHistory[0]); err != nil {
 		t.Fatal(err)
-	}
-	htx := rtid.Transaction
-	if len(htx.SiacoinOutputs) != 2 {
+	} else if len(htx.Transaction.SiacoinOutputs) != 2 {
 		t.Fatal("transaction should have two outputs")
 	}
 
 	// create an unsigned transaction using available outputs
-	var outputs []SeedUTXO
-	if err := httpGet(ss, "/utxos", &outputs); err != nil {
+	outputs, err := client.UnspentOutputs()
+	if err != nil {
 		t.Fatal(err)
 	} else if len(outputs) != 2 {
 		t.Fatal("should have two UTXOs")
@@ -136,36 +152,37 @@ func TestWatchSeedServer(t *testing.T) {
 	}
 	if err := txn.StandaloneValid(types.ASICHardforkHeight + 1); err != nil {
 		t.Fatal(err)
-	} else if err := httpPost(ss, "/broadcast", []types.Transaction{txn}, nil); err != nil {
+	} else if err := client.Broadcast([]types.Transaction{txn}); err != nil {
 		t.Fatal(err)
 	}
 
 	// outputs should no longer be reported as spendable
-	if err := httpGet(ss, "/utxos", &outputs); err != nil {
+	if outputs, err := client.UnspentOutputs(); err != nil {
 		t.Fatal(err)
 	} else if len(outputs) != 0 {
 		t.Fatal("should have zero UTXOs")
 	}
 
 	// instead, they should appear in limbo
-	if err := httpGet(ss, "/limbo", &outputs); err != nil {
+	limbo, err := client.LimboOutputs()
+	if err != nil {
 		t.Fatal(err)
-	} else if len(outputs) != 2 {
-		t.Fatal("should have two UTXOs in limbo, got", len(outputs))
+	} else if len(limbo) != 2 {
+		t.Fatal("should have two UTXOs in limbo")
 	}
 
 	// bring back an output from limbo
-	if err := httpDelete(ss, "/limbo/"+outputs[0].ID.String()); err != nil {
+	if err := client.RemoveFromLimbo(limbo[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := httpGet(ss, "/utxos", &outputs); err != nil {
+	if outputs, err := client.UnspentOutputs(); err != nil {
 		t.Fatal(err)
 	} else if len(outputs) != 1 {
-		t.Fatal("should have one UTXO, got", len(outputs))
+		t.Fatal("should have one UTXO")
 	}
-	if err := httpGet(ss, "/limbo", &outputs); err != nil {
+	if limbo, err := client.LimboOutputs(); err != nil {
 		t.Fatal(err)
-	} else if len(outputs) != 1 {
+	} else if len(limbo) != 1 {
 		t.Fatal("should have one UTXO in limbo")
 	}
 }
@@ -176,6 +193,8 @@ func TestWatchServerThreadSafety(t *testing.T) {
 	cs := new(mockCS)
 	cs.ConsensusSetSubscribe(w, store.ConsensusChangeID(), nil)
 	ss := NewWatchSeedServer(w, stubTpool{})
+	client, stop := runWatchSeedServer(ss)
+	defer stop()
 
 	randomAddr := func() (info wallet.SeedAddressInfo) {
 		info.UnlockConditions = wallet.StandardUnlockConditions(wallet.NewSeed().PublicKey(0))
@@ -194,11 +213,11 @@ func TestWatchServerThreadSafety(t *testing.T) {
 	// concurrently
 	funcs := []func(){
 		func() { cs.sendTxn(txn) },
-		func() { httpGet(ss, "/balance", new(types.Currency)) },
-		func() { httpPost(ss, "/addresses", randomAddr(), new(types.UnlockHash)) },
-		func() { httpDelete(ss, "/addresses/"+randomAddr().UnlockConditions.UnlockHash().String()) },
-		func() { httpGet(ss, "/addresses", new(types.UnlockHash)) },
-		func() { httpGet(ss, "/transactions?max=2&addr="+addr.String(), new([]types.TransactionID)) },
+		func() { client.Balance() },
+		func() { client.WatchAddress(randomAddr()) },
+		func() { client.UnwatchAddress(randomAddr().UnlockConditions.UnlockHash()) },
+		func() { client.Addresses() },
+		func() { client.TransactionsByAddress(addr, 2) },
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(funcs))

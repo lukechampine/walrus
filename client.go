@@ -49,7 +49,7 @@ func (c genericClient) post(route string, d, r interface{}) error { return c.req
 func (c genericClient) put(route string, d interface{}) error     { return c.req("PUT", route, d, nil) }
 func (c genericClient) delete(route string) error                 { return c.req("DELETE", route, nil, nil) }
 
-func (c *genericClient) AllAddresses() (addrs []types.UnlockHash, err error) {
+func (c *genericClient) Addresses() (addrs []types.UnlockHash, err error) {
 	err = c.get("/addresses", &addrs)
 	return
 }
