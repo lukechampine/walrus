@@ -475,7 +475,7 @@ newest-to-oldest.
 
 `GET http://localhost:9380/transactions?addr=<addr>&max=<max>`
 
-### URL Parameters
+### Query Parameters
 
 Parameter | Description
 ----------|------------
