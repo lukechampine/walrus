@@ -173,7 +173,7 @@ func TestSeedServer(t *testing.T) {
 	}
 
 	// shouldn't have any transactions yet
-	var txnHistory ResponseTransactions
+	var txnHistory []types.TransactionID
 	if err := httpGet(ss, "/transactions", &txnHistory); err != nil {
 		t.Fatal(err)
 	} else if len(txnHistory) != 0 {
@@ -181,7 +181,7 @@ func TestSeedServer(t *testing.T) {
 	}
 
 	// shouldn't have any addresses yet
-	var addresses ResponseAddresses
+	var addresses []types.UnlockHash
 	if err := httpGet(ss, "/addresses", &addresses); err != nil {
 		t.Fatal(err)
 	} else if len(addresses) != 0 {
@@ -195,7 +195,7 @@ func TestSeedServer(t *testing.T) {
 	}
 
 	// seed index should be incremented to 1
-	var seedIndex ResponseSeedIndex
+	var seedIndex uint64
 	if err := httpGet(ss, "/seedindex", &seedIndex); err != nil {
 		t.Fatal(err)
 	} else if seedIndex != 1 {
@@ -210,7 +210,7 @@ func TestSeedServer(t *testing.T) {
 	}
 
 	// address info should be present
-	var addrInfo ResponseAddressesAddr
+	var addrInfo wallet.SeedAddressInfo
 	if err := httpGet(ss, "/addresses/"+addr.String(), &addrInfo); err != nil {
 		t.Fatal(err)
 	} else if addrInfo.KeyIndex != 0 || addrInfo.UnlockConditions.UnlockHash() != addr {
@@ -262,7 +262,7 @@ func TestSeedServer(t *testing.T) {
 	}
 
 	// create an unsigned transaction using available outputs
-	var outputs ResponseUTXOs
+	var outputs []UTXO
 	if err := httpGet(ss, "/utxos", &outputs); err != nil {
 		t.Fatal(err)
 	} else if len(outputs) != 2 {
@@ -355,10 +355,10 @@ func TestSeedServerThreadSafety(t *testing.T) {
 	// concurrently
 	funcs := []func(){
 		func() { cs.sendTxn(txn) },
-		func() { httpGet(ss, "/balance", new(ResponseBalance)) },
-		func() { httpPost(ss, "/nextaddress", nil, new(ResponseNextAddress)) },
-		func() { httpGet(ss, "/addresses", new(ResponseAddresses)) },
-		func() { httpGet(ss, "/transactions?max=2&addr="+addr.String(), new(ResponseTransactions)) },
+		func() { httpGet(ss, "/balance", new(types.Currency)) },
+		func() { httpPost(ss, "/nextaddress", nil, new(types.UnlockHash)) },
+		func() { httpGet(ss, "/addresses", new([]types.UnlockHash)) },
+		func() { httpGet(ss, "/transactions?max=2&addr="+addr.String(), new([]types.TransactionID)) },
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(funcs))

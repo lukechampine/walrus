@@ -36,7 +36,7 @@ func (s *watchSeedServer) addressesHandlerGET(w http.ResponseWriter, req *http.R
 }
 
 func (s *watchSeedServer) addressesHandlerPOST(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var info RequestAddresses
+	var info wallet.SeedAddressInfo
 	if err := json.NewDecoder(req.Body).Decode(&info); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -74,7 +74,7 @@ func (s *watchSeedServer) balanceHandler(w http.ResponseWriter, req *http.Reques
 }
 
 func (s *watchSeedServer) broadcastHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	var txnSet RequestBroadcast
+	var txnSet []types.Transaction
 	if err := json.NewDecoder(req.Body).Decode(&txnSet); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -116,7 +116,7 @@ func (s *watchSeedServer) feeHandler(w http.ResponseWriter, req *http.Request, _
 }
 
 func (s *watchSeedServer) limboHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	writeJSON(w, ResponseLimboUTXOs(s.w.LimboOutputs()))
+	writeJSON(w, responseLimboUTXOs(s.w.LimboOutputs()))
 }
 
 func (s *watchSeedServer) limboHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
@@ -171,7 +171,7 @@ func (s *watchSeedServer) transactionsHandler(w http.ResponseWriter, req *http.R
 		}
 	}
 
-	var resp ResponseTransactions
+	var resp []types.TransactionID
 	if req.FormValue("addr") != "" {
 		var addr types.UnlockHash
 		if err := addr.LoadString(req.FormValue("addr")); err != nil {
@@ -220,7 +220,7 @@ func (s *watchSeedServer) transactionsidHandler(w http.ResponseWriter, req *http
 
 func (s *watchSeedServer) utxosHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	outputs := s.w.UnspentOutputs()
-	utxos := make(ResponseSeedUTXOs, len(outputs))
+	utxos := make([]SeedUTXO, len(outputs))
 	for i, o := range outputs {
 		info, ok := s.getInfo(o.UnlockHash)
 		if !ok {

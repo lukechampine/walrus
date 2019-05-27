@@ -47,7 +47,7 @@ func (s *seedServer) addressesaddrHandlerGET(w http.ResponseWriter, req *http.Re
 		http.Error(w, "No such entry", http.StatusNotFound)
 		return
 	}
-	writeJSON(w, ResponseAddressesAddr(info))
+	writeJSON(w, responseAddressesAddr(info))
 }
 
 func (s *seedServer) balanceHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -55,7 +55,7 @@ func (s *seedServer) balanceHandler(w http.ResponseWriter, req *http.Request, _ 
 }
 
 func (s *seedServer) broadcastHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	var txnSet RequestBroadcast
+	var txnSet []types.Transaction
 	if err := json.NewDecoder(req.Body).Decode(&txnSet); err != nil {
 		http.Error(w, "Could not parse transaction: "+err.Error(), http.StatusBadRequest)
 		return
@@ -99,7 +99,7 @@ func (s *seedServer) feeHandler(w http.ResponseWriter, req *http.Request, _ http
 }
 
 func (s *seedServer) limboHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	writeJSON(w, ResponseLimboUTXOs(s.w.LimboOutputs()))
+	writeJSON(w, responseLimboUTXOs(s.w.LimboOutputs()))
 }
 
 func (s *seedServer) limboHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
@@ -160,7 +160,7 @@ func (s *seedServer) signHandler(w http.ResponseWriter, req *http.Request, _ htt
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, (*ResponseSign)(unsafe.Pointer(&rs.Transaction)))
+	writeJSON(w, (*encodedTransaction)(unsafe.Pointer(&rs.Transaction)))
 }
 
 func (s *seedServer) transactionsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -174,7 +174,7 @@ func (s *seedServer) transactionsHandler(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	var resp ResponseTransactions
+	var resp []types.TransactionID
 	if req.FormValue("addr") != "" {
 		var addr types.UnlockHash
 		if err := addr.LoadString(req.FormValue("addr")); err != nil {
@@ -222,7 +222,7 @@ func (s *seedServer) transactionsidHandler(w http.ResponseWriter, req *http.Requ
 
 func (s *seedServer) utxosHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	inputs := s.w.ValuedInputs()
-	utxos := make(ResponseUTXOs, len(inputs))
+	utxos := make([]UTXO, len(inputs))
 	for i, vi := range inputs {
 		utxos[i] = UTXO{
 			ID:               vi.ParentID,

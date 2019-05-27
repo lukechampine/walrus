@@ -100,34 +100,21 @@ type encodedTransaction struct {
 	} `json:"transactionSignatures,omitempty"`
 }
 
-// RequestBroadcast is the request type for the /broadcast endpoint.
-type RequestBroadcast []types.Transaction
-
 // RequestSign is the request type for the /sign endpoint.
 type RequestSign struct {
 	Transaction types.Transaction `json:"transaction"`
 	ToSign      []int             `json:"toSign"`
 }
 
-// RequestAddresses is the request type for the /addresses endpoint.
-type RequestAddresses wallet.SeedAddressInfo
-
-// ResponseAddresses is the response type for the /addresses endpoint.
-type ResponseAddresses []types.UnlockHash
-
-// ResponseAddressesAddr is the response type for the /addresses/:addr endpoint.
-type ResponseAddressesAddr wallet.SeedAddressInfo
+type responseAddressesAddr wallet.SeedAddressInfo
 
 // MarshalJSON implements json.Marshaler.
-func (r ResponseAddressesAddr) MarshalJSON() ([]byte, error) {
+func (r responseAddressesAddr) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		UnlockConditions encodedUnlockConditions `json:"unlockConditions"`
 		KeyIndex         uint64                  `json:"keyIndex"`
 	}{encodedUnlockConditions(r.UnlockConditions), r.KeyIndex})
 }
-
-// ResponseBalance is the response type for the /balance endpoint.
-type ResponseBalance types.Currency
 
 // ResponseConsensus is the response type for the /consensus endpoint.
 type ResponseConsensus struct {
@@ -135,11 +122,10 @@ type ResponseConsensus struct {
 	CCID   crypto.Hash       `json:"ccid"`
 }
 
-// ResponseLimboUTXOs is the response type for the /limbo endpoint.
-type ResponseLimboUTXOs []wallet.LimboOutput
+type responseLimboUTXOs []wallet.LimboOutput
 
 // MarshalJSON implements json.Marshaler.
-func (r ResponseLimboUTXOs) MarshalJSON() ([]byte, error) {
+func (r responseLimboUTXOs) MarshalJSON() ([]byte, error) {
 	enc := make([]struct {
 		ID         types.SiacoinOutputID `json:"ID"`
 		Value      types.Currency        `json:"value"`
@@ -155,22 +141,19 @@ func (r ResponseLimboUTXOs) MarshalJSON() ([]byte, error) {
 	return json.Marshal(enc)
 }
 
-// ResponseNextAddress is the response type for the /nextaddress endpoint.
-type ResponseNextAddress types.UnlockHash
-
-// ResponseSeedIndex is the response type for the /seedindex endpoint.
-type ResponseSeedIndex uint64
-
-// ResponseSign is the response type for the /sign endpoint.
-type ResponseSign types.Transaction
+// responseSign is the response type for the /sign endpoint.
+type responseSign types.Transaction
 
 // MarshalJSON implements json.Marshaler.
-func (r ResponseSign) MarshalJSON() ([]byte, error) {
+func (r responseSign) MarshalJSON() ([]byte, error) {
 	return json.Marshal(*(*encodedTransaction)(unsafe.Pointer(&r)))
 }
 
-// ResponseTransactions is the response type for the /transactions endpoint.
-type ResponseTransactions []types.TransactionID
+// RequestTransactions is the request type for the /transactions endpoint.
+type RequestTransactions struct {
+	Max     *int              // optional
+	Address *types.UnlockHash // optional
+}
 
 // ResponseTransactionsID is the response type for the /transactions/:id
 // endpoint.
@@ -199,14 +182,8 @@ type UTXO struct {
 	UnlockHash       types.UnlockHash       `json:"unlockHash"`
 }
 
-// ResponseUTXOs is the response type for the /utxos endpoint.
-type ResponseUTXOs []UTXO
-
 // A SeedUTXO is a UTXO owned by a seed-derived address.
 type SeedUTXO struct {
 	UTXO
 	KeyIndex uint64 `json:"keyIndex"`
 }
-
-// ResponseSeedUTXOs is the response type for the /utxos endpoint.
-type ResponseSeedUTXOs []SeedUTXO
