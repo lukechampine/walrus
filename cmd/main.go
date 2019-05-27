@@ -140,7 +140,7 @@ func main() {
 			usage()
 			return
 		}
-		log.Printf("walrus v0.1.0\nCommit:     %s\nRelease:    %s\nGo version: %s %s/%s\nBuild Date: %s\n",
+		log.Printf("walrus v0.2.0\nCommit:     %s\nRelease:    %s\nGo version: %s %s/%s\nBuild Date: %s\n",
 			githash, build.Release, runtime.Version(), runtime.GOOS, runtime.GOARCH, builddate)
 
 	case seedCmd:
