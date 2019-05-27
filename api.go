@@ -1,4 +1,4 @@
-package api
+package walrus
 
 import (
 	"encoding/hex"

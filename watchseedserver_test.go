@@ -1,4 +1,4 @@
-package main
+package walrus
 
 import (
 	"io/ioutil"
@@ -12,7 +12,6 @@ import (
 	"gitlab.com/NebulousLabs/Sia/types"
 	"gitlab.com/NebulousLabs/fastrand"
 	"lukechampine.com/us/wallet"
-	"lukechampine.com/walrus/api"
 )
 
 func TestWatchSeedServer(t *testing.T) {
@@ -41,7 +40,7 @@ func TestWatchSeedServer(t *testing.T) {
 	}
 
 	// shouldn't have any transactions yet
-	var txnHistory api.ResponseTransactions
+	var txnHistory ResponseTransactions
 	if err := httpGet(ss, "/transactions", &txnHistory); err != nil {
 		t.Fatal(err)
 	} else if len(txnHistory) != 0 {
@@ -49,7 +48,7 @@ func TestWatchSeedServer(t *testing.T) {
 	}
 
 	// shouldn't have any addresses yet
-	var addresses api.ResponseAddresses
+	var addresses ResponseAddresses
 	if err := httpGet(ss, "/addresses", &addresses); err != nil {
 		t.Fatal(err)
 	} else if len(addresses) != 0 {
@@ -58,7 +57,7 @@ func TestWatchSeedServer(t *testing.T) {
 
 	// create and add an address
 	seed := wallet.NewSeed()
-	addrInfo := api.RequestAddresses{
+	addrInfo := RequestAddresses{
 		UnlockConditions: wallet.StandardUnlockConditions(seed.PublicKey(0)),
 		KeyIndex:         0,
 	}
@@ -95,7 +94,7 @@ func TestWatchSeedServer(t *testing.T) {
 	} else if len(txnHistory) != 1 {
 		t.Fatal("transaction should appear in history")
 	}
-	var rtid api.ResponseTransactionsID
+	var rtid ResponseTransactionsID
 	if err := httpGet(ss, "/transactions/"+txnHistory[0].String(), &rtid); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +104,7 @@ func TestWatchSeedServer(t *testing.T) {
 	}
 
 	// create an unsigned transaction using available outputs
-	var outputs api.ResponseUTXOs
+	var outputs ResponseUTXOs
 	if err := httpGet(ss, "/utxos", &outputs); err != nil {
 		t.Fatal(err)
 	} else if len(outputs) != 2 {
@@ -195,11 +194,11 @@ func TestWatchServerThreadSafety(t *testing.T) {
 	// concurrently
 	funcs := []func(){
 		func() { cs.sendTxn(txn) },
-		func() { httpGet(ss, "/balance", new(api.ResponseBalance)) },
-		func() { httpPost(ss, "/addresses", api.RequestAddresses(randomAddr()), new(types.UnlockHash)) },
+		func() { httpGet(ss, "/balance", new(ResponseBalance)) },
+		func() { httpPost(ss, "/addresses", RequestAddresses(randomAddr()), new(types.UnlockHash)) },
 		func() { httpDelete(ss, "/addresses/"+randomAddr().UnlockConditions.UnlockHash().String()) },
-		func() { httpGet(ss, "/addresses", new(api.ResponseAddresses)) },
-		func() { httpGet(ss, "/transactions?max=2&addr="+addr.String(), new(api.ResponseTransactions)) },
+		func() { httpGet(ss, "/addresses", new(ResponseAddresses)) },
+		func() { httpGet(ss, "/transactions?max=2&addr="+addr.String(), new(ResponseTransactions)) },
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(funcs))

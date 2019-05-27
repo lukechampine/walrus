@@ -7,7 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 	"lukechampine.com/us/wallet"
-	"lukechampine.com/walrus/api"
+	"lukechampine.com/walrus"
 )
 
 func gen(seed wallet.Seed, indexStr string) error {
@@ -19,7 +19,7 @@ func gen(seed wallet.Seed, indexStr string) error {
 		UnlockConditions: wallet.StandardUnlockConditions(seed.PublicKey(index)),
 		KeyIndex:         index,
 	}
-	js, _ := json.MarshalIndent(api.ResponseAddressesAddr(info), "", "\t")
+	js, _ := json.MarshalIndent(walrus.ResponseAddressesAddr(info), "", "\t")
 	fmt.Println(info.UnlockConditions.UnlockHash())
 	fmt.Println(string(js))
 	return nil

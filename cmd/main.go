@@ -15,6 +15,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"lukechampine.com/flagg"
 	"lukechampine.com/us/wallet"
+	"lukechampine.com/walrus"
 )
 
 var (
@@ -211,7 +212,7 @@ func start(seed wallet.Seed, dir string, APIaddr string) error {
 	if err != nil {
 		return err
 	}
-	ss := NewSeedServer(w, tp)
+	ss := walrus.NewSeedServer(w, tp)
 
 	log.Printf("Listening on %v...", APIaddr)
 	return http.ListenAndServe(APIaddr, ss)
@@ -240,7 +241,7 @@ func startWatchOnly(dir string, APIaddr string) error {
 	if err != nil {
 		return err
 	}
-	ss := NewWatchSeedServer(w, tp)
+	ss := walrus.NewWatchSeedServer(w, tp)
 
 	log.Printf("Listening on %v...", APIaddr)
 	return http.ListenAndServe(APIaddr, ss)

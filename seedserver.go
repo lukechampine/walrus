@@ -1,4 +1,4 @@
-package main
+package walrus
 
 import (
 	"encoding/json"
@@ -14,7 +14,6 @@ import (
 	"gitlab.com/NebulousLabs/Sia/modules"
 	"gitlab.com/NebulousLabs/Sia/types"
 	"lukechampine.com/us/wallet"
-	"lukechampine.com/walrus/api"
 )
 
 func writeJSON(w io.Writer, v interface{}) {
@@ -48,7 +47,7 @@ func (s *seedServer) addressesaddrHandlerGET(w http.ResponseWriter, req *http.Re
 		http.Error(w, "No such entry", http.StatusNotFound)
 		return
 	}
-	writeJSON(w, api.ResponseAddressesAddr(info))
+	writeJSON(w, ResponseAddressesAddr(info))
 }
 
 func (s *seedServer) balanceHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -56,7 +55,7 @@ func (s *seedServer) balanceHandler(w http.ResponseWriter, req *http.Request, _ 
 }
 
 func (s *seedServer) broadcastHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	var txnSet api.RequestBroadcast
+	var txnSet RequestBroadcast
 	if err := json.NewDecoder(req.Body).Decode(&txnSet); err != nil {
 		http.Error(w, "Could not parse transaction: "+err.Error(), http.StatusBadRequest)
 		return
@@ -88,7 +87,7 @@ func (s *seedServer) broadcastHandler(w http.ResponseWriter, req *http.Request, 
 }
 
 func (s *seedServer) consensusHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	writeJSON(w, api.ResponseConsensus{
+	writeJSON(w, ResponseConsensus{
 		Height: s.w.ChainHeight(),
 		CCID:   crypto.Hash(s.w.ConsensusChangeID()),
 	})
@@ -100,7 +99,7 @@ func (s *seedServer) feeHandler(w http.ResponseWriter, req *http.Request, _ http
 }
 
 func (s *seedServer) limboHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	writeJSON(w, api.ResponseLimboUTXOs(s.w.LimboOutputs()))
+	writeJSON(w, ResponseLimboUTXOs(s.w.LimboOutputs()))
 }
 
 func (s *seedServer) limboHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
@@ -153,7 +152,7 @@ func (s *seedServer) seedindexHandler(w http.ResponseWriter, req *http.Request, 
 }
 
 func (s *seedServer) signHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	var rs api.RequestSign
+	var rs RequestSign
 	if err := json.NewDecoder(req.Body).Decode(&rs); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -161,7 +160,7 @@ func (s *seedServer) signHandler(w http.ResponseWriter, req *http.Request, _ htt
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, (*api.ResponseSign)(unsafe.Pointer(&rs.Transaction)))
+	writeJSON(w, (*ResponseSign)(unsafe.Pointer(&rs.Transaction)))
 }
 
 func (s *seedServer) transactionsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -175,7 +174,7 @@ func (s *seedServer) transactionsHandler(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	var resp api.ResponseTransactions
+	var resp ResponseTransactions
 	if req.FormValue("addr") != "" {
 		var addr types.UnlockHash
 		if err := addr.LoadString(req.FormValue("addr")); err != nil {
@@ -213,7 +212,7 @@ func (s *seedServer) transactionsidHandler(w http.ResponseWriter, req *http.Requ
 		fee = fee.Add(c)
 	}
 	outflow = outflow.Add(fee)
-	writeJSON(w, api.ResponseTransactionsID{
+	writeJSON(w, ResponseTransactionsID{
 		Transaction: txn,
 		Inflow:      inflow,
 		Outflow:     outflow,
@@ -223,9 +222,9 @@ func (s *seedServer) transactionsidHandler(w http.ResponseWriter, req *http.Requ
 
 func (s *seedServer) utxosHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	inputs := s.w.ValuedInputs()
-	utxos := make(api.ResponseUTXOs, len(inputs))
+	utxos := make(ResponseUTXOs, len(inputs))
 	for i, vi := range inputs {
-		utxos[i] = api.UTXO{
+		utxos[i] = UTXO{
 			ID:               vi.ParentID,
 			Value:            vi.Value,
 			UnlockConditions: vi.UnlockConditions,
