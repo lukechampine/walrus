@@ -1,4 +1,4 @@
-package walrus
+package walrus // import "lukechampine.com/walrus"
 
 import (
 	"encoding/hex"
