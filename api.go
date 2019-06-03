@@ -116,6 +116,25 @@ func (r responseAddressesAddr) MarshalJSON() ([]byte, error) {
 	}{encodedUnlockConditions(r.UnlockConditions), r.KeyIndex})
 }
 
+type responseBlockRewards []wallet.BlockReward
+
+// MarshalJSON implements json.Marshaler.
+func (r responseBlockRewards) MarshalJSON() ([]byte, error) {
+	enc := make([]struct {
+		ID         types.SiacoinOutputID `json:"ID"`
+		Value      types.Currency        `json:"value"`
+		UnlockHash types.UnlockHash      `json:"unlockHash"`
+		Timelock   types.BlockHeight     `json:"timelock"`
+	}, len(r))
+	for i := range enc {
+		enc[i].ID = r[i].ID
+		enc[i].Value = r[i].Value
+		enc[i].UnlockHash = r[i].UnlockHash
+		enc[i].Timelock = r[i].Timelock
+	}
+	return json.Marshal(enc)
+}
+
 // ResponseConsensus is the response type for the /consensus endpoint.
 type ResponseConsensus struct {
 	Height types.BlockHeight `json:"height"`
@@ -137,6 +156,43 @@ func (r responseLimboUTXOs) MarshalJSON() ([]byte, error) {
 		enc[i].Value = r[i].Value
 		enc[i].UnlockHash = r[i].UnlockHash
 		enc[i].LimboSince = r[i].LimboSince
+	}
+	return json.Marshal(enc)
+}
+
+type responseFileContracts []wallet.FileContract
+
+// MarshalJSON implements json.Marshaler.
+func (r responseFileContracts) MarshalJSON() ([]byte, error) {
+	enc := make([]struct {
+		ID                 types.FileContractID     `json:"id"`
+		FileSize           uint64                   `json:"fileSize"`
+		FileMerkleRoot     crypto.Hash              `json:"fileMerkleRoot"`
+		WindowStart        types.BlockHeight        `json:"windowStart"`
+		WindowEnd          types.BlockHeight        `json:"windowEnd"`
+		Payout             types.Currency           `json:"payout"`
+		ValidProofOutputs  []encodedSiacoinOutput   `json:"validProofOutputs"`
+		MissedProofOutputs []encodedSiacoinOutput   `json:"missedProofOutputs"`
+		UnlockHash         types.UnlockHash         `json:"unlockHash"`
+		UnlockConditions   *encodedUnlockConditions `json:"unlockConditions,omitempty"`
+		RevisionNumber     uint64                   `json:"revisionNumber"`
+	}, len(r))
+	for i := range enc {
+		enc[i].ID = r[i].ID
+		enc[i].FileSize = r[i].FileSize
+		enc[i].FileMerkleRoot = r[i].FileMerkleRoot
+		enc[i].WindowStart = r[i].WindowStart
+		enc[i].WindowEnd = r[i].WindowEnd
+		enc[i].Payout = r[i].Payout
+		enc[i].ValidProofOutputs = *(*[]encodedSiacoinOutput)(unsafe.Pointer(&r[i].ValidProofOutputs))
+		enc[i].MissedProofOutputs = *(*[]encodedSiacoinOutput)(unsafe.Pointer(&r[i].MissedProofOutputs))
+		enc[i].UnlockHash = r[i].UnlockHash
+		ucs := (*encodedUnlockConditions)(&r[i].UnlockConditions)
+		if len(r[i].UnlockConditions.PublicKeys) == 0 {
+			ucs = nil
+		}
+		enc[i].UnlockConditions = ucs
+		enc[i].RevisionNumber = r[i].RevisionNumber
 	}
 	return json.Marshal(enc)
 }
@@ -181,4 +237,15 @@ type UTXO struct {
 	UnlockConditions types.UnlockConditions `json:"unlockConditions"`
 	UnlockHash       types.UnlockHash       `json:"unlockHash"`
 	KeyIndex         uint64                 `json:"keyIndex"`
+}
+
+// MarshalJSON implements json.Marshaler.
+func (u UTXO) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		ID               types.SiacoinOutputID   `json:"ID"`
+		Value            types.Currency          `json:"value"`
+		UnlockConditions encodedUnlockConditions `json:"unlockConditions"`
+		UnlockHash       types.UnlockHash        `json:"unlockHash"`
+		KeyIndex         uint64                  `json:"keyIndex"`
+	}{u.ID, u.Value, encodedUnlockConditions(u.UnlockConditions), u.UnlockHash, u.KeyIndex})
 }

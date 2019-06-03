@@ -73,6 +73,14 @@ func (c *genericClient) Broadcast(txnSet []types.Transaction) error {
 	return c.post("/broadcast", txnSet, nil)
 }
 
+// BlockRewards returns the block rewards tracked by the wallet. If max < 0, all
+// rewards are returned; otherwise, at most max rewards are returned. The
+// rewards are ordered newest-to-oldest.
+func (c *genericClient) BlockRewards(max int) (rewards []wallet.BlockReward, err error) {
+	err = c.get("/blockrewards?max="+strconv.Itoa(max), &rewards)
+	return
+}
+
 // ConsensusInfo returns the current blockchain height and consensus change ID.
 // The latter is a unique ID that changes whenever blocks are added to the
 // blockchain.
@@ -85,6 +93,21 @@ func (c *genericClient) ConsensusInfo() (info ResponseConsensus, err error) {
 // per byte of the Sia-encoded transaction.
 func (c *genericClient) RecommendedFee() (fee types.Currency, err error) {
 	err = c.get("/fee", &fee)
+	return
+}
+
+// FileContracts returns the file contracts tracked by the wallet. If max < 0,
+// all contracts are returned; otherwise, at most max contracts are returned.
+// The contracts are ordered newest-to-oldest.
+func (c *genericClient) FileContracts(max int) (contracts []wallet.FileContract, err error) {
+	err = c.get("/filecontracts?max="+strconv.Itoa(max), &contracts)
+	return
+}
+
+// FileContractHistory returns the revision history of the specified file
+// contract, which must be a contract tracked by the wallet.
+func (c *genericClient) FileContractHistory(id types.FileContractID) (history []wallet.FileContract, err error) {
+	err = c.get("/filecontracts/"+id.String(), &history)
 	return
 }
 

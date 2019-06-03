@@ -124,6 +124,53 @@ the values of the outputs returned by [`/utxos`](#list-unspent-outputs).
 None
 
 
+## List Block Rewards
+
+> Example Request:
+
+```shell
+curl "localhost:9380/blockrewards?max=1"
+```
+
+> Example Response:
+
+```json
+[
+	{
+		"id": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
+		"value": "123000000000000000000000000000",
+		"unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
+		"timelock": 123456
+	}
+]
+```
+
+Lists the block rewards tracked by the wallet. A block reward is the sum of the
+block subsidy (the new siacoins minted in the block) and the fees within the
+block's transactions. Technically, Sia allows this reward to be split among an
+arbitrary number of parties, but in practice the reward is paid out to a single
+address.
+
+<aside class="notice">
+Block rewards are timelocked: they cannot be spent for the next 144 blocks.
+After 144 blocks, the reward will appear in <code>/utxos</code>.
+</aside>
+
+### HTTP Request
+
+`GET http://localhost:9380/blockrewards`
+
+### Query Parameters
+
+Parameter | Description
+----------|------------
+    max   | The maximum number of block rewards to return
+
+### Errors
+
+None
+
+
 ## Broadcast a Transaction Set
 
 > Example Request:
@@ -248,6 +295,198 @@ contracts, storage proofs, siafunds, or multi-sig inputs.
 None
 
 
+## List File Contracts
+
+> Example Request:
+
+```shell
+curl "localhost:9380/filecontracts?max=1"
+```
+
+> Example Response:
+
+```json
+[
+  {
+    "id": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
+    "filesize": 16777216,
+    "fileMerkleRoot": "966ae3a6b1b86bcf35bfa2a1482a2d3e78cb59e47161442b7aa50646d0fb39c9",
+    "windowStart": 123000,
+    "windowEnd": 123456,
+    "payout": "123000000000000000000000000000",
+    "validProofOutputs": [
+      {
+        "unlockHash": "2f8282cbe2f9696f3144c0aa4ced56dbd967dc2897806af3bed8a63aca16e18b686ba0dc208c",
+        "value": "12145600000000"
+      },
+      {
+        "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
+        "value": "278900000000"
+      },
+    ],
+    "missedProofOutputs": [
+      {
+        "unlockHash": "2f8282cbe2f9696f3144c0aa4ced56dbd967dc2897806af3bed8a63aca16e18b686ba0dc208c",
+        "value": "12145600000000"
+      },
+      {
+        "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
+        "value": "278900000000"
+      },
+      {
+        "unlockHash": "000000000000000000000000000000000000000000000000000000000000000089eb0d6a8a69",
+        "value": "3141592653"
+      },
+    ],
+    "unlockHash": "52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64981855ad8681d",
+    "unlockConditions": {
+      "publicKeys": [
+        "ed25519:c00913e02a63e4cf532d9b2ce282fad85af699815c18c595ea804462a794f751",
+        "ed25519:120e5183722b7e809298a7cba681b0d32e04e460641046199a371301300174b1",
+      ],
+      "signaturesRequired": 2
+    },
+    "revisionNumber": 1
+  },
+]
+```
+
+Lists the file contracts relevant to the wallet. Each element represents the
+most recent on-chain revision of a given contract.
+
+<aside class="notice">
+Most contract revisions are negotiated off-chain, with only the final revision
+being broadcast shortly prior to the termination of the contract.
+</aside>
+
+<aside class="notice">
+File contracts resolve at the end of their "window," after which either the set
+of valid or missed proof outputs are created (depending on whether or not the
+host submitted a valid storage proof). After the contract has resolved, the
+newly-created output(s) will appear in <code>/utxos</code>.
+</aside>
+
+### HTTP Request
+
+`GET http://localhost:9380/filecontracts`
+
+### Query Parameters
+
+Parameter | Description
+----------|------------
+    max   | The maximum number of contracts to return
+
+### Errors
+
+None
+
+
+## List File Contract History
+
+> Example Request:
+
+```shell
+curl "localhost:9380/filecontracts/b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8"
+```
+
+> Example Response:
+
+```json
+[
+  {
+    "id": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
+    "filesize": 16777216,
+    "fileMerkleRoot": "966ae3a6b1b86bcf35bfa2a1482a2d3e78cb59e47161442b7aa50646d0fb39c9",
+    "windowStart": 123000,
+    "windowEnd": 123456,
+    "payout": "123000000000000000000000000000",
+    "validProofOutputs": [
+      {
+        "unlockHash": "2f8282cbe2f9696f3144c0aa4ced56dbd967dc2897806af3bed8a63aca16e18b686ba0dc208c",
+        "value": "12145600000000"
+      },
+      {
+        "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
+        "value": "278900000000"
+      },
+    ],
+    "missedProofOutputs": [
+      {
+        "unlockHash": "2f8282cbe2f9696f3144c0aa4ced56dbd967dc2897806af3bed8a63aca16e18b686ba0dc208c",
+        "value": "12145600000000"
+      },
+      {
+        "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
+        "value": "278900000000"
+      },
+      {
+        "unlockHash": "000000000000000000000000000000000000000000000000000000000000000089eb0d6a8a69",
+        "value": "3141592653"
+      },
+    ],
+    "unlockHash": "52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64981855ad8681d",
+    "unlockConditions": {
+      "publicKeys": [
+        "ed25519:c00913e02a63e4cf532d9b2ce282fad85af699815c18c595ea804462a794f751",
+        "ed25519:120e5183722b7e809298a7cba681b0d32e04e460641046199a371301300174b1",
+      ],
+      "signaturesRequired": 2
+    },
+    "revisionNumber": 1
+  },
+  {
+    "id": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
+    "filesize": 4194304,
+    "fileMerkleRoot": "0194fdc2fa2ffcc041d3ff12045b73c86e4ff95ff662a5eee82abdf44a2d0b75",
+    "windowStart": 123000,
+    "windowEnd": 123456,
+    "payout": "123000000000000000000000000000",
+    "validProofOutputs": [
+      {
+        "unlockHash": "2f8282cbe2f9696f3144c0aa4ced56dbd967dc2897806af3bed8a63aca16e18b686ba0dc208c",
+        "value": "12345600000000"
+      },
+      {
+        "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
+        "value": "78900000000"
+      },
+    ],
+    "missedProofOutputs": [
+      {
+        "unlockHash": "2f8282cbe2f9696f3144c0aa4ced56dbd967dc2897806af3bed8a63aca16e18b686ba0dc208c",
+        "value": "12345600000000"
+      },
+      {
+        "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
+        "value": "78900000000"
+      },
+      {
+        "unlockHash": "000000000000000000000000000000000000000000000000000000000000000089eb0d6a8a69",
+        "value": "3141592653"
+      },
+    ],
+    "unlockHash": "52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64981855ad8681d",
+    "revisionNumber": 0
+  }
+]
+```
+
+Lists the history of on-chain revisions made to a given file contract, ordered
+newest-to-oldest. The initial file contract is the last element of the array.
+
+<aside class="notice">
+The initial file contract does not contain unlock conditions.
+</aside>
+
+### HTTP Request
+
+`GET http://localhost:9380/filecontracts`
+
+### Errors
+
+None
+
+
 ## List Limbo Outputs
 
 > Example Request:
@@ -261,7 +500,7 @@ curl "localhost:9380/limbo"
 ```json
 [
 	{
-		"ID": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
+		"id": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
 		"value": "123000000000000000000000000000",
 		"unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
 		"limboSince": "2019-02-22T23:25:11-05:00"
@@ -561,7 +800,7 @@ curl "localhost:9380/utxos"
 ```json
 [
   {
-    "ID": "8d16e3de006a57028fd014ab85c2a76a32c5bbd2e1df9340b04795734c9c3372",
+    "id": "8d16e3de006a57028fd014ab85c2a76a32c5bbd2e1df9340b04795734c9c3372",
     "value": "10000000000000000000000000000",
     "unlockConditions": {
       "publicKeys": [ "ed25519:0ea4e46899fe246e14122e3ca5865a7006d99086c52b1c63ab0e32226e56a7a1" ],
@@ -570,7 +809,7 @@ curl "localhost:9380/utxos"
     "unlockHash": "5ac6af95fe284b4bbb0110ef51d3c90f3e9ea37586352ec83bad569230bad7f37a452c0a2a2f"
   },
   {
-    "ID": "d8412f884e85519a6896cac505b4eceafd16ed79ca5d2d44e0b24a80a9df8083",
+    "id": "d8412f884e85519a6896cac505b4eceafd16ed79ca5d2d44e0b24a80a9df8083",
     "value": "123000000000000000000000000000",
     "unlockConditions": {
       "publicKeys": [ "ed25519:8408ad8d5e7f605995bdf9ab13e5c0d84fbe1fc610c141e0578c7d26d5cfee75" ],

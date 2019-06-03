@@ -32,8 +32,11 @@ type genericWallet interface {
 	Addresses() []types.UnlockHash
 	AddressInfo(addr types.UnlockHash) (wallet.SeedAddressInfo, bool)
 	Balance() types.Currency
+	BlockRewards(n int) []wallet.BlockReward
 	ChainHeight() types.BlockHeight
 	ConsensusChangeID() modules.ConsensusChangeID
+	FileContracts(n int) []wallet.FileContract
+	FileContractHistory(id types.FileContractID) []wallet.FileContract
 	LimboOutputs() []wallet.LimboOutput
 	MarkSpent(id types.SiacoinOutputID, spent bool)
 	Memo(txid types.TransactionID) []byte
@@ -70,6 +73,19 @@ func (s *genericServer) addressesaddrHandlerGET(w http.ResponseWriter, req *http
 
 func (s *genericServer) balanceHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	writeJSON(w, s.w.Balance())
+}
+
+func (s *genericServer) blockrewardsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	max := -1
+	if req.FormValue("max") != "" {
+		var err error
+		max, err = strconv.Atoi(req.FormValue("max"))
+		if err != nil {
+			http.Error(w, "Invalid 'max' value: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	writeJSON(w, responseBlockRewards(s.w.BlockRewards(max)))
 }
 
 func (s *genericServer) broadcastHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -116,26 +132,48 @@ func (s *genericServer) feeHandler(w http.ResponseWriter, req *http.Request, _ h
 	writeJSON(w, median)
 }
 
+func (s *genericServer) filecontractsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	max := -1
+	if req.FormValue("max") != "" {
+		var err error
+		max, err = strconv.Atoi(req.FormValue("max"))
+		if err != nil {
+			http.Error(w, "Invalid 'max' value: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	writeJSON(w, responseFileContracts(s.w.FileContracts(max)))
+}
+
+func (s *genericServer) filecontractsidHandler(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	var id types.FileContractID
+	if err := id.LoadString(ps.ByName("id")); err != nil {
+		http.Error(w, "Invalid ID: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, responseFileContracts(s.w.FileContractHistory(id)))
+}
+
 func (s *genericServer) limboHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	writeJSON(w, responseLimboUTXOs(s.w.LimboOutputs()))
 }
 
 func (s *genericServer) limboHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var id crypto.Hash
-	if err := id.LoadString(ps.ByName("id")); err != nil {
+	var id types.SiacoinOutputID
+	if err := (*crypto.Hash)(&id).LoadString(ps.ByName("id")); err != nil {
 		http.Error(w, "Invalid ID: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.w.MarkSpent(types.SiacoinOutputID(id), true)
+	s.w.MarkSpent(id, true)
 }
 
 func (s *genericServer) limboHandlerDELETE(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var id crypto.Hash
-	if err := id.LoadString(ps.ByName("id")); err != nil {
+	var id types.SiacoinOutputID
+	if err := (*crypto.Hash)(&id).LoadString(ps.ByName("id")); err != nil {
 		http.Error(w, "Invalid ID: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.w.MarkSpent(types.SiacoinOutputID(id), false)
+	s.w.MarkSpent(id, false)
 }
 
 func (s *genericServer) memosHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
@@ -167,7 +205,7 @@ func (s *genericServer) transactionsHandler(w http.ResponseWriter, req *http.Req
 		var err error
 		max, err = strconv.Atoi(req.FormValue("max"))
 		if err != nil {
-			http.Error(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid 'max' value: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
@@ -248,9 +286,12 @@ func newGenericServer(w genericWallet, tp wallet.TransactionPool) *httprouter.Ro
 	mux.GET("/addresses", s.addressesHandler)
 	mux.GET("/addresses/:addr", s.addressesaddrHandlerGET)
 	mux.GET("/balance", s.balanceHandler)
+	mux.GET("/blockrewards", s.blockrewardsHandler)
 	mux.POST("/broadcast", s.broadcastHandler)
 	mux.GET("/consensus", s.consensusHandler)
 	mux.GET("/fee", s.feeHandler)
+	mux.GET("/filecontracts", s.filecontractsHandler)
+	mux.GET("/filecontracts/:id", s.filecontractsidHandler)
 	mux.PUT("/limbo/:id", s.limboHandlerPUT)
 	mux.GET("/limbo", s.limboHandler)
 	mux.DELETE("/limbo/:id", s.limboHandlerDELETE)
