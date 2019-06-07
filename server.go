@@ -113,7 +113,7 @@ func (s *genericServer) broadcastHandler(w http.ResponseWriter, req *http.Reques
 	// TODO: wouldn't need this if wallet was subscribed to tpool
 	for _, txn := range txnSet {
 		for _, sci := range txn.SiacoinInputs {
-			if s.w.OwnsAddress(sci.UnlockConditions.UnlockHash()) {
+			if s.w.OwnsAddress(wallet.CalculateUnlockHash(sci.UnlockConditions)) {
 				s.w.MarkSpent(sci.ParentID, true)
 			}
 		}
