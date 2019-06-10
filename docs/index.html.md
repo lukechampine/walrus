@@ -103,7 +103,7 @@ Parameter | Description
 > Example Request:
 
 ```shell
-curl "localhost:9380/balance"
+curl "localhost:9380/balance?limbo=true"
 ```
 
 > Example Response:
@@ -113,11 +113,19 @@ curl "localhost:9380/balance"
 ```
 
 Returns the current wallet balance in hastings. This is equivalent to summing
-the values of the outputs returned by [`/utxos`](#list-unspent-outputs).
+the values of the outputs returned by [`/utxos`](#list-unspent-outputs). If the
+`limbo` flag is set, the balance incorporates any transactions currently in
+Limbo.
 
 ### HTTP Request
 
 `GET http://localhost:9380/balance`
+
+### URL Parameters
+
+Parameter | Description
+----------|------------
+  limbo   | If true, incorporate Limbo transactions
 
 ### Errors
 
@@ -136,12 +144,12 @@ curl "localhost:9380/blockrewards?max=1"
 
 ```json
 [
-	{
-		"id": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
-		"value": "123000000000000000000000000000",
-		"unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
-		"timelock": 123456
-	}
+  {
+    "id": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
+    "value": "123000000000000000000000000000",
+    "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
+    "timelock": 123456
+  }
 ]
 ```
 
@@ -203,9 +211,11 @@ curl "localhost:9380/broadcast" \
 Broadcasts the supplied transaction set to all connected peers.
 
 <aside class="notice">
-Most transaction sets contain a single transaction. A "parent" transaction is
-only necessary if the "child" transaction spends outputs created in the parent,
-and the parent is not already in the blockchain.
+Most transaction sets contain a single transaction. However, if a transaction
+spends an output created by a transaction currently in Limbo, this "parent"
+transaction must also be included in the set. If you are unsure whether a
+transaction has parents in Limbo, query the <code>/unconfirmedparents</code>
+endpoint.
 </aside>
 
 ### HTTP Request
@@ -283,7 +293,7 @@ following equation:<br>
 <code>size = 100 + (num_inputs * 313) + (num_outputs * 50)</code><br>
 <br>
 Do not use this equation for transactions that include arbitrary data, file
-contracts, storage proofs, siafunds, or multi-sig inputs.
+contracts, storage proofs, siafunds, or multisig inputs.
 </aside>
 
 ### HTTP Request
@@ -487,7 +497,7 @@ The initial file contract does not contain unlock conditions.
 None
 
 
-## List Limbo Outputs
+## List Limbo Transactions
 
 > Example Request:
 
@@ -499,16 +509,31 @@ curl "localhost:9380/limbo"
 
 ```json
 [
-	{
-		"id": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
-		"value": "123000000000000000000000000000",
-		"unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f",
-		"limboSince": "2019-02-22T23:25:11-05:00"
-	}
+  {
+    "siacoinInputs": [{
+      "parentID": "b87491287c34880a1b512f47ec932d777c6809672236e2533fd565969e69a09b",
+      "unlockConditions": {
+        "publicKeys": [ "ed25519:37e32b4a07d5a617c8b872daabcba320d604f3c5017c580956c1ac42c37f8059" ],
+        "signaturesRequired": 1
+      }
+    }],
+    "siacoinOutputs": [{
+      "value": "123000000000000000000000000000",
+      "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f"
+    }],
+    "minerFees": [ "22500000000000000000000" ],
+    "transactionSignatures": [{
+      "parentID": "b87491287c34880a1b512f47ec932d777c6809672236e2533fd565969e69a09b",
+      "publicKeyIndex": 0,
+      "coveredFields": { "wholeTransaction": true },
+      "signature": "WbJO3jeLBgzbMZI7D4yx5dNrX5Qw2e3/8lTakL/F23e3DL0nG2O02zUmdlq9466lx9uhfT3ejJOsO1oB3lMZBQ=="
+    }],
+    "limboSince": "1993-04-12T23:25:11-05:00"
+  },
 ]
 ```
 
-Lists outputs that are in [Limbo](#limbo).
+Lists transactions that are in [Limbo](#limbo).
 
 ### HTTP Request
 
@@ -519,32 +544,50 @@ Lists outputs that are in [Limbo](#limbo).
 None
 
 
-## Move an Output to Limbo
+## Add a Transaction to Limbo
 
 > Example Request:
 
 ```shell
 curl "localhost:9380/limbo/8d16e3de006a57028fd014ab85c2a76a32c5bbd2e1df9340b04795734c9c3372" \
-  -X PUT
+  -X PUT \
+  -d '{
+    "siacoinInputs": [{
+      "parentID": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
+      "unlockConditions": {
+        "publicKeys": [ "ed25519:8408ad8d5e7f605995bdf9ab13e5c0d84fbe1fc610c141e0578c7d26d5cfee75" ],
+        "signaturesRequired": 1
+      }
+    }],
+    "siacoinOutputs": [{
+      "value": "100000000000000000000000000000",
+      "unlockHash": "df1b42c80b5f7a67331893fde0923a5071d6d7dff4c78baec547cf5ca4d314a1d78b6b1c8d42"
+    }],
+    "minerFees": [ "13000000000000000000000000000" ],
+    "transactionSignatures": [{
+      "parentID": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
+      "publicKeyIndex": 0,
+      "coveredFields": { "wholeTransaction": true },
+      "signature": "rFtBFv9oeScpO3mhp6O2liMwBKYXn05SaOmzhhjQtIkOwAClaJTpLEKn3U26zYis2AG2tH2idWSJNZXNSVa8DQ=="
+    }]
+  }'
 ```
 
-Places an output in [Limbo](#limbo). The output will no longer appear in
-[`/utxos`](#list-unspent-outputs) or contribute to the wallet's balance.
+Places a transaction in [Limbo](#limbo).
 
 <aside class="notice">
-Manually moving outputs to Limbo is typically unnecessary. When a transaction is
-broadcast, its outputs are moved to Limbo automatically.
+Ttransactions that you broadcast are added to Limbo automatically.
 </aside>
 
 ### HTTP Request
 
-`PUT http://localhost:9380/limbo/<id>`
+`PUT http://localhost:9380/limbo/<txid>`
 
 ### URL Parameters
 
 Parameter | Description
 ----------|------------
-    id    | The ID of the output to move
+   txid   | The ID of the transaction to add
 
 ### Errors
 
@@ -553,7 +596,7 @@ Parameter | Description
   400  | ID is invalid
 
 
-## Remove an Output from Limbo
+## Remove a Transaction from Limbo
 
 > Example Request:
 
@@ -562,24 +605,21 @@ curl "localhost:9380/limbo/8d16e3de006a57028fd014ab85c2a76a32c5bbd2e1df9340b0479
   -X DELETE
 ```
 
-Removes an output from [Limbo](#limbo). The output will appear in
-[`/utxos`](#list-unspent-outputs) and contribute to the wallet's balance.
+Removes a transaction from [Limbo](#limbo).
 
 <aside class="notice">
-If an output appears in the blockchain, it will automatically be removed from
-Limbo, but (because it has been spent) it will not appear in <code>/utxos</code>
-or contribute to the wallet's balance.
+Transactions that appear in the blockchain are automatically removed from Limbo.
 </aside>
 
 ### HTTP Request
 
-`DELETE http://localhost:9380/limbo/<id>`
+`DELETE http://localhost:9380/limbo/<txid>`
 
 ### URL Parameters
 
 Parameter | Description
 ----------|------------
-    id    | The ID of the output to remove
+   txid   | The ID of the transaction to remove
 
 ### Errors
 
@@ -601,7 +641,7 @@ curl "localhost:9380/memos/2936d6eab2272dda76603aa8078be02d979cf52ac3d06c799536c
 Adds a memo for a transaction, overwriting the previous memo if it exists.
 
 <aside class="warning">
-Memos are not stored on the blockchain! They exist only in your local wallet.
+Memos are not stored on the blockchain. They exist only in your local wallet.
 </aside>
 
 ### HTTP Request
@@ -792,7 +832,7 @@ Parameter | Description
 > Example Request:
 
 ```shell
-curl "localhost:9380/utxos"
+curl "localhost:9380/utxos?limbo=true"
 ```
 
 > Example Response:
@@ -820,11 +860,90 @@ curl "localhost:9380/utxos"
 ]
 ```
 
-Returns the outputs that the wallet can spend.
+Returns the outputs that the wallet can spend. If the `limbo` flag is set, the
+returned set incorporates any transactions currently in Limbo.
+
+<aside class="notice">
+When in doubt, set the <code>limbo</code> flag to true. Otherwise, you risk
+accidentally double-spending an output.
+</aside>
 
 ### HTTP Request
 
 `GET http://localhost:9380/utxos`
+
+### URL Parameters
+
+Parameter | Description
+----------|------------
+  limbo   | If true, incorporate Limbo transactions
+
+### Errors
+
+None
+
+
+## Get Unconfirmed Parents
+
+> Example Request:
+
+```shell
+curl "localhost:9380/unconfirmedparents" \
+  -X POST \
+  -d '{
+    "transaction": {
+      "siacoinInputs": [{
+        "parentID": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
+        "unlockConditions": {
+          "publicKeys": [ "ed25519:8408ad8d5e7f605995bdf9ab13e5c0d84fbe1fc610c141e0578c7d26d5cfee75" ],
+          "signaturesRequired": 1
+        }
+      }],
+      "siacoinOutputs": [{
+        "value": "100000000000000000000000000000",
+        "unlockHash": "df1b42c80b5f7a67331893fde0923a5071d6d7dff4c78baec547cf5ca4d314a1d78b6b1c8d42"
+      }],
+      "minerFees": [ "13000000000000000000000000000" ]
+    }
+  }'
+```
+
+> Example Response:
+
+```json
+[
+  {
+    "siacoinInputs": [{
+      "parentID": "487491287c34880a1b512f47ec932d777c6809672236e2533fd565969e69a09b",
+      "unlockConditions": {
+        "publicKeys": [ "ed25519:37e32b4a07d5a617c8b872daabcba320d604f3c5017c580956c1ac42c37f8059" ],
+        "signaturesRequired": 1
+      }
+    }],
+    "siacoinOutputs": [{
+      "value": "123000000000000000000000000000",
+      "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f"
+    }],
+    "minerFees": [ "22500000000000000000000" ],
+    "transactionSignatures": [{
+      "parentID": "b87491287c34880a1b512f47ec932d777c6809672236e2533fd565969e69a09b",
+      "publicKeyIndex": 0,
+      "coveredFields": { "wholeTransaction": true },
+      "signature": "WbJO3jeLBgzbMZI7D4yx5dNrX5Qw2e3/8lTakL/F23e3DL0nG2O02zUmdlq9466lx9uhfT3ejJOsO1oB3lMZBQ=="
+    }],
+    "limboSince": "1993-04-12T23:25:11-05:00"
+  },
+]
+```
+
+Returns the unconfirmed parents of the transaction, i.e. the transactions
+currently in Limbo that created one or more outputs spent by the supplied
+transaction. These transactions must be included when the transaction is
+broadcast.
+
+### HTTP Request
+
+`POST http://localhost:9380/unconfirmedparents`
 
 ### Errors
 
@@ -1074,23 +1193,32 @@ Parameter | Description
 
 # Limbo
 
-When an output is spent in a transaction, it cannot be spent again. However,
-there is a period of uncertainty between the transaction being *broadcast* to
+There is a period of uncertainty between the transaction being broadcast to
 miners and the transaction actually appearing in the blockchain. If the
 transaction has insufficient fees, or is invalidated by a later block, miners
-may discard it.
+may discard it. During this period of uncertainty, we say that the transaction's
+outputs are "in Limbo."
 
-During this period of uncertainty, we say that the transaction's outputs are "in
-Limbo." After an output has been in Limbo for a sufficiently long time, it is
-typically safe to assume that its corresponding transaction will never be
-included in a future block. The output may then be manually removed from Limbo
-and reused in a different transaction without risking a double-spend.
+Limbo is important because, in order to make multiple transactions in quick
+succession, a wallet may need to spend outputs created in Limbo transactions.
+Although this "daisy-chaining" can be risky (since, if a Limbo transaction does
+not make it into a block, all of its "children" become invalid as well), it is
+necessary to avoid excessive wait times between transactions.
+
+After a transaction has been in Limbo for a sufficiently long time, it is
+typically safe to assume that it will never be included in a future block. The
+transaction may then be manually removed from Limbo, allowing its outputs to be
+reused in a different transaction without risking a double-spend.
 
 <aside class="warning">
-Limbo is distinct from the question of transaction finality. Outputs will be
-removed from Limbo as soon as they have a single confirmation, but subsequent
-blocks may reorg the chain and "unspend" the output. Limbo should be used solely
-as a means to avoid accidental double-spends.
+Limbo is local to your wallet instance. Adding transactions to Limbo does not
+cause other nodes on the Sia network to do the same.
+</aside>
+
+<aside class="warning">
+Limbo is distinct from the question of transaction finality. Transactions will be
+removed from Limbo as soon as they appear in the blockchain, but subsequent
+blocks may reorg the chain and "unspend" the transaction.
 </aside>
 
 

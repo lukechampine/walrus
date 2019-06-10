@@ -141,20 +141,16 @@ type ResponseConsensus struct {
 	CCID   crypto.Hash       `json:"ccid"`
 }
 
-type responseLimboUTXOs []wallet.LimboOutput
+type responseLimbo []wallet.LimboTransaction
 
 // MarshalJSON implements json.Marshaler.
-func (r responseLimboUTXOs) MarshalJSON() ([]byte, error) {
+func (r responseLimbo) MarshalJSON() ([]byte, error) {
 	enc := make([]struct {
-		ID         types.SiacoinOutputID `json:"ID"`
-		Value      types.Currency        `json:"value"`
-		UnlockHash types.UnlockHash      `json:"unlockHash"`
-		LimboSince time.Time             `json:"limboSince"`
+		encodedTransaction
+		LimboSince time.Time `json:"limboSince"`
 	}, len(r))
 	for i := range enc {
-		enc[i].ID = r[i].ID
-		enc[i].Value = r[i].Value
-		enc[i].UnlockHash = r[i].UnlockHash
+		enc[i].encodedTransaction = *(*encodedTransaction)(unsafe.Pointer(&r[i].Transaction))
 		enc[i].LimboSince = r[i].LimboSince
 	}
 	return json.Marshal(enc)

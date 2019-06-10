@@ -62,9 +62,10 @@ func (c *genericClient) AddressInfo(addr types.UnlockHash) (info wallet.SeedAddr
 	return
 }
 
-// Balance returns the current wallet balance.
-func (c *genericClient) Balance() (bal types.Currency, err error) {
-	err = c.get("/balance", &bal)
+// Balance returns the current wallet balance. If the limbo flag is true, the
+// balance will reflect any transactions currently in Limbo.
+func (c *genericClient) Balance(limbo bool) (bal types.Currency, err error) {
+	err = c.get("/balance?limbo="+strconv.FormatBool(limbo), &bal)
 	return
 }
 
@@ -111,27 +112,28 @@ func (c *genericClient) FileContractHistory(id types.FileContractID) (history []
 	return
 }
 
-// LimboOutputs returns outputs that are in Limbo.
-func (c *genericClient) LimboOutputs() (outputs []wallet.LimboOutput, err error) {
-	err = c.get("/limbo", &outputs)
+// LimboTransactions returns transactions that are in Limbo.
+func (c *genericClient) LimboTransactions() (txns []wallet.LimboTransaction, err error) {
+	err = c.get("/limbo", &txns)
 	return
 }
 
-// MoveToLimbo places an output in Limbo. The output will no longer be returned
+// AddToLimbo places a transaction in Limbo. The output will no longer be returned
 // by Outputs or contribute to the wallet's balance.
 //
-// Manually moving outputs to Limbo is typically unnecessary. Calling Broadcast
-// will move the relevant outputs to Limbo automatically.
-func (c *genericClient) MoveToLimbo(id types.SiacoinOutputID) (err error) {
-	return c.put("/limbo/"+id.String(), nil)
+// Manually adding transactions to Limbo is typically unnecessary. Calling Broadcast
+// will move all transactions in the set to Limbo automatically.
+func (c *genericClient) AddToLimbo(txn types.Transaction) (err error) {
+	return c.put("/limbo/"+txn.ID().String(), txn)
 }
 
-// RemoveFromLimbo removes an output from Limbo.
+// RemoveFromLimbo removes a transaction from Limbo.
 //
-// Manually removing outputs from Limbo is typically unnecessary. When a valid
-// block spends an output, it will be removed from Limbo automatically.
-func (c *genericClient) RemoveFromLimbo(id types.SiacoinOutputID) (err error) {
-	return c.delete("/limbo/" + id.String())
+// Manually removing transactions from Limbo is typically unnecessary. When a
+// transaction appears in a valid block, it will be removed from Limbo
+// automatically.
+func (c *genericClient) RemoveFromLimbo(txid types.TransactionID) (err error) {
+	return c.delete("/limbo/" + txid.String())
 }
 
 // Memo retrieves the memo for a transaction.
@@ -194,9 +196,18 @@ func (c *genericClient) Transaction(txid types.TransactionID) (txn ResponseTrans
 	return
 }
 
-// UnspentOutputs returns the outputs that the wallet can spend.
-func (c *genericClient) UnspentOutputs() (utxos []UTXO, err error) {
-	err = c.get("/utxos", &utxos)
+// UnconfirmedParents returns any parents of txn that are in Limbo. These
+// transactions will need to be included in the transaction set passed to
+// Broadcast.
+func (c *genericClient) UnconfirmedParents(txn types.Transaction) (parents []wallet.LimboTransaction, err error) {
+	err = c.post("/unconfirmedparents", txn, &parents)
+	return
+}
+
+// UnspentOutputs returns the outputs that the wallet can spend. If the limbo
+// flag is true, the outputs will reflect any transactions currently in Limbo.
+func (c *genericClient) UnspentOutputs(limbo bool) (utxos []UTXO, err error) {
+	err = c.get("/utxos?limbo="+strconv.FormatBool(limbo), &utxos)
 	return
 }
 

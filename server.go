@@ -31,21 +31,22 @@ func writeJSON(w io.Writer, v interface{}) {
 type genericWallet interface {
 	Addresses() []types.UnlockHash
 	AddressInfo(addr types.UnlockHash) (wallet.SeedAddressInfo, bool)
-	Balance() types.Currency
+	Balance(limbo bool) types.Currency
 	BlockRewards(n int) []wallet.BlockReward
 	ChainHeight() types.BlockHeight
 	ConsensusChangeID() modules.ConsensusChangeID
 	FileContracts(n int) []wallet.FileContract
 	FileContractHistory(id types.FileContractID) []wallet.FileContract
-	LimboOutputs() []wallet.LimboOutput
-	MarkSpent(id types.SiacoinOutputID, spent bool)
+	LimboTransactions() []wallet.LimboTransaction
+	AddToLimbo(txn types.Transaction)
+	RemoveFromLimbo(txid types.TransactionID)
 	Memo(txid types.TransactionID) []byte
 	OwnsAddress(addr types.UnlockHash) bool
 	SetMemo(txid types.TransactionID, memo []byte)
 	Transaction(id types.TransactionID) (types.Transaction, bool)
 	Transactions(n int) []types.TransactionID
 	TransactionsByAddress(addr types.UnlockHash, n int) []types.TransactionID
-	UnspentOutputs() []wallet.UnspentOutput
+	UnspentOutputs(limbo bool) []wallet.UnspentOutput
 }
 
 type genericServer struct {
@@ -72,7 +73,8 @@ func (s *genericServer) addressesaddrHandlerGET(w http.ResponseWriter, req *http
 }
 
 func (s *genericServer) balanceHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	writeJSON(w, s.w.Balance())
+	limbo := req.FormValue("limbo") == "true"
+	writeJSON(w, s.w.Balance(limbo))
 }
 
 func (s *genericServer) blockrewardsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -98,25 +100,17 @@ func (s *genericServer) broadcastHandler(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	// add any unconfirmed parents of the first transaction in the set
-	parents := wallet.UnconfirmedParents(txnSet[0], s.tp)
-
 	// submit the transaction set (ignoring duplicate error -- if the set is
 	// already in the tpool, great)
-	err := s.tp.AcceptTransactionSet(append(parents, txnSet...))
+	err := s.tp.AcceptTransactionSet(txnSet)
 	if err != nil && err != modules.ErrDuplicateTransactionSet {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// mark all wallet-owned inputs as spent
-	// TODO: wouldn't need this if wallet was subscribed to tpool
+	// add the transactions to Limbo
 	for _, txn := range txnSet {
-		for _, sci := range txn.SiacoinInputs {
-			if s.w.OwnsAddress(wallet.CalculateUnlockHash(sci.UnlockConditions)) {
-				s.w.MarkSpent(sci.ParentID, true)
-			}
-		}
+		s.w.AddToLimbo(txn)
 	}
 }
 
@@ -155,30 +149,30 @@ func (s *genericServer) filecontractsidHandler(w http.ResponseWriter, req *http.
 }
 
 func (s *genericServer) limboHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	writeJSON(w, responseLimboUTXOs(s.w.LimboOutputs()))
+	writeJSON(w, responseLimbo(s.w.LimboTransactions()))
 }
 
 func (s *genericServer) limboHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var id types.SiacoinOutputID
-	if err := (*crypto.Hash)(&id).LoadString(ps.ByName("id")); err != nil {
-		http.Error(w, "Invalid ID: "+err.Error(), http.StatusBadRequest)
+	var txn types.Transaction
+	if err := json.NewDecoder(req.Body).Decode(&txn); err != nil {
+		http.Error(w, "Could not parse transaction: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.w.MarkSpent(id, true)
+	s.w.AddToLimbo(txn)
 }
 
 func (s *genericServer) limboHandlerDELETE(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var id types.SiacoinOutputID
-	if err := (*crypto.Hash)(&id).LoadString(ps.ByName("id")); err != nil {
+	var txid types.TransactionID
+	if err := (*crypto.Hash)(&txid).LoadString(ps.ByName("id")); err != nil {
 		http.Error(w, "Invalid ID: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.w.MarkSpent(id, false)
+	s.w.RemoveFromLimbo(txid)
 }
 
 func (s *genericServer) memosHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var txid crypto.Hash
-	if err := txid.LoadString(ps.ByName("txid")); err != nil {
+	var txid types.TransactionID
+	if err := (*crypto.Hash)(&txid).LoadString(ps.ByName("txid")); err != nil {
 		http.Error(w, "Invalid transaction ID: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -187,16 +181,16 @@ func (s *genericServer) memosHandlerPUT(w http.ResponseWriter, req *http.Request
 		http.Error(w, "Couldn't read memo: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.w.SetMemo(types.TransactionID(txid), body)
+	s.w.SetMemo(txid, body)
 }
 
 func (s *genericServer) memosHandlerGET(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var txid crypto.Hash
-	if err := txid.LoadString(ps.ByName("txid")); err != nil {
+	var txid types.TransactionID
+	if err := (*crypto.Hash)(&txid).LoadString(ps.ByName("txid")); err != nil {
 		http.Error(w, "Invalid transaction ID: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	w.Write(s.w.Memo(types.TransactionID(txid)))
+	w.Write(s.w.Memo(txid))
 }
 
 func (s *genericServer) transactionsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -256,8 +250,18 @@ func (s *genericServer) transactionsidHandler(w http.ResponseWriter, req *http.R
 	})
 }
 
+func (s *genericServer) unconfirmedparentsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	var txn types.Transaction
+	if err := json.NewDecoder(req.Body).Decode(&txn); err != nil {
+		http.Error(w, "Could not parse transaction: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, wallet.UnconfirmedParents(txn, s.w.LimboTransactions()))
+}
+
 func (s *genericServer) utxosHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	outputs := s.w.UnspentOutputs()
+	limbo := req.FormValue("limbo") == "true"
+	outputs := s.w.UnspentOutputs(limbo)
 	utxos := make([]UTXO, len(outputs))
 	for i, o := range outputs {
 		info, ok := s.w.AddressInfo(o.UnlockHash)
@@ -299,6 +303,7 @@ func newGenericServer(w genericWallet, tp wallet.TransactionPool) *httprouter.Ro
 	mux.GET("/memos/:txid", s.memosHandlerGET)
 	mux.GET("/transactions", s.transactionsHandler)
 	mux.GET("/transactions/:txid", s.transactionsidHandler)
+	mux.POST("/unconfirmedparents", s.unconfirmedparentsHandler)
 	mux.GET("/utxos", s.utxosHandler)
 	return mux
 }

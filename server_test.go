@@ -231,7 +231,7 @@ func TestSeedServer(t *testing.T) {
 	cs.sendTxn(types.GenesisBlock.Transactions[0])
 
 	// initial balance should be zero
-	if balance, err := client.Balance(); err != nil {
+	if balance, err := client.Balance(false); err != nil {
 		t.Fatal(err)
 	} else if !balance.IsZero() {
 		t.Fatal("balance should be zero")
@@ -301,7 +301,7 @@ func TestSeedServer(t *testing.T) {
 	}
 
 	// get new balance
-	if balance, err := client.Balance(); err != nil {
+	if balance, err := client.Balance(false); err != nil {
 		t.Fatal(err)
 	} else if balance.Cmp(types.SiacoinPrecision) != 0 {
 		t.Fatal("balance should be 1 SC")
@@ -321,7 +321,7 @@ func TestSeedServer(t *testing.T) {
 	}
 
 	// create an unsigned transaction using available outputs
-	outputs, err := client.UnspentOutputs()
+	outputs, err := client.UnspentOutputs(false)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(outputs) != 2 {
@@ -363,34 +363,35 @@ func TestSeedServer(t *testing.T) {
 		t.Fatal("wrong memo for transaction")
 	}
 
-	// outputs should no longer be reported as spendable
-	if outputs, err := client.UnspentOutputs(); err != nil {
-		t.Fatal(err)
-	} else if len(outputs) != 0 {
-		t.Fatal("should have zero UTXOs")
-	}
-
-	// instead, they should appear in limbo
-	limbo, err := client.LimboOutputs()
-	if err != nil {
-		t.Fatal(err)
-	} else if len(limbo) != 2 {
-		t.Fatal("should have two UTXOs in limbo")
-	}
-
-	// bring back an output from limbo
-	if err := client.RemoveFromLimbo(limbo[0].ID); err != nil {
-		t.Fatal(err)
-	}
-	if outputs, err := client.UnspentOutputs(); err != nil {
+	// with limbo transactions applied, we should only have one UTXO (the change
+	// output created by the transaction)
+	if outputs, err := client.UnspentOutputs(true); err != nil {
 		t.Fatal(err)
 	} else if len(outputs) != 1 {
 		t.Fatal("should have one UTXO")
 	}
-	if limbo, err := client.LimboOutputs(); err != nil {
+
+	// the spent outputs should appear in the limbo transaction
+	limbo, err := client.LimboTransactions()
+	if len(limbo) != 1 {
+		t.Fatal("should have one transaction in limbo")
+	} else if len(limbo[0].SiacoinInputs) != 2 {
+		t.Fatal("limbo transaction should have two inputs")
+	}
+
+	// bring the transaction back from limbo
+	if err := client.RemoveFromLimbo(limbo[0].ID()); err != nil {
 		t.Fatal(err)
-	} else if len(limbo) != 1 {
-		t.Fatal("should have one UTXO in limbo")
+	}
+	// we should have two UTXOs again
+	if limbo, err := client.LimboTransactions(); err != nil {
+		t.Fatal(err)
+	} else if len(limbo) != 0 {
+		t.Fatal("limbo should be empty")
+	} else if outputs, err := client.UnspentOutputs(true); err != nil {
+		t.Fatal(err)
+	} else if len(outputs) != 2 {
+		t.Fatal("should have two UTXOs")
 	}
 
 	// mine a block reward
@@ -403,20 +404,20 @@ func TestSeedServer(t *testing.T) {
 		t.Fatalf("block reward's timelock should be %v, got %v", types.MaturityDelay, rewards[0].Timelock)
 	}
 	// reward should not be reported as an UTXO yet
-	if outputs, err := client.UnspentOutputs(); err != nil {
+	if outputs, err := client.UnspentOutputs(true); err != nil {
 		t.Fatal(err)
-	} else if len(outputs) != 1 {
-		t.Fatal("should have one UTXO")
+	} else if len(outputs) != 2 {
+		t.Fatal("should have two UTXOs")
 	}
 	// mine until the reward matures
 	for i := 0; i < int(types.MaturityDelay); i++ {
 		cs.mineBlock(types.ZeroCurrency, types.UnlockHash{})
 	}
 	// reward should now be available as an UTXO
-	if outputs, err := client.UnspentOutputs(); err != nil {
+	if outputs, err := client.UnspentOutputs(true); err != nil {
 		t.Fatal(err)
-	} else if len(outputs) != 2 {
-		t.Fatal("should have two UTXOs")
+	} else if len(outputs) != 3 {
+		t.Fatal("should have three UTXOs")
 	}
 
 	// form a file contract
@@ -461,7 +462,7 @@ func TestSeedServerThreadSafety(t *testing.T) {
 	// concurrently
 	funcs := []func(){
 		func() { cs.sendTxn(txn) },
-		func() { client.Balance() },
+		func() { client.Balance(true) },
 		func() { client.NextAddress() },
 		func() { client.Addresses() },
 		func() { client.TransactionsByAddress(addr, 2) },
@@ -509,7 +510,7 @@ func TestWatchSeedServer(t *testing.T) {
 	defer stop()
 
 	// initial balance should be zero
-	if balance, err := client.Balance(); err != nil {
+	if balance, err := client.Balance(false); err != nil {
 		t.Fatal(err)
 	} else if !balance.IsZero() {
 		t.Fatal("balance should be zero")
@@ -563,7 +564,7 @@ func TestWatchSeedServer(t *testing.T) {
 	})
 
 	// get new balance
-	if balance, err := client.Balance(); err != nil {
+	if balance, err := client.Balance(false); err != nil {
 		t.Fatal(err)
 	} else if balance.Cmp(types.SiacoinPrecision) != 0 {
 		t.Fatal("balance should be 1 SC")
@@ -583,7 +584,7 @@ func TestWatchSeedServer(t *testing.T) {
 	}
 
 	// create an unsigned transaction using available outputs
-	outputs, err := client.UnspentOutputs()
+	outputs, err := client.UnspentOutputs(false)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(outputs) != 2 {
@@ -619,34 +620,35 @@ func TestWatchSeedServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// outputs should no longer be reported as spendable
-	if outputs, err := client.UnspentOutputs(); err != nil {
-		t.Fatal(err)
-	} else if len(outputs) != 0 {
-		t.Fatal("should have zero UTXOs")
-	}
-
-	// instead, they should appear in limbo
-	limbo, err := client.LimboOutputs()
-	if err != nil {
-		t.Fatal(err)
-	} else if len(limbo) != 2 {
-		t.Fatal("should have two UTXOs in limbo")
-	}
-
-	// bring back an output from limbo
-	if err := client.RemoveFromLimbo(limbo[0].ID); err != nil {
-		t.Fatal(err)
-	}
-	if outputs, err := client.UnspentOutputs(); err != nil {
+	// with limbo transactions applied, we should only have one UTXO (the change
+	// output created by the transaction)
+	if outputs, err := client.UnspentOutputs(true); err != nil {
 		t.Fatal(err)
 	} else if len(outputs) != 1 {
 		t.Fatal("should have one UTXO")
 	}
-	if limbo, err := client.LimboOutputs(); err != nil {
+
+	// the spent outputs should appear in the limbo transaction
+	limbo, err := client.LimboTransactions()
+	if len(limbo) != 1 {
+		t.Fatal("should have one transaction in limbo")
+	} else if len(limbo[0].SiacoinInputs) != 2 {
+		t.Fatal("limbo transaction should have two inputs", len(limbo[0].SiacoinOutputs))
+	}
+
+	// bring the transaction back from limbo
+	if err := client.RemoveFromLimbo(limbo[0].ID()); err != nil {
 		t.Fatal(err)
-	} else if len(limbo) != 1 {
-		t.Fatal("should have one UTXO in limbo")
+	}
+	// we should have two UTXOs again
+	if limbo, err := client.LimboTransactions(); err != nil {
+		t.Fatal(err)
+	} else if len(limbo) != 0 {
+		t.Fatal("limbo should be empty")
+	} else if outputs, err := client.UnspentOutputs(true); err != nil {
+		t.Fatal(err)
+	} else if len(outputs) != 2 {
+		t.Fatal("should have two UTXOs")
 	}
 }
 
@@ -675,7 +677,7 @@ func TestWatchServerThreadSafety(t *testing.T) {
 	// concurrently
 	funcs := []func(){
 		func() { cs.sendTxn(txn) },
-		func() { client.Balance() },
+		func() { client.Balance(true) },
 		func() { client.WatchAddress(randomAddr()) },
 		func() { client.UnwatchAddress(randomAddr().UnlockConditions.UnlockHash()) },
 		func() { client.Addresses() },
