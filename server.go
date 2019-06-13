@@ -17,6 +17,13 @@ import (
 	"lukechampine.com/us/wallet"
 )
 
+// A TransactionPool can broadcast transactions and estimate transaction
+// fees.
+type TransactionPool interface {
+	AcceptTransactionSet([]types.Transaction) error
+	FeeEstimation() (min types.Currency, max types.Currency)
+}
+
 func writeJSON(w io.Writer, v interface{}) {
 	// encode nil slices as [] instead of null
 	if val := reflect.ValueOf(v); val.Kind() == reflect.Slice && val.Len() == 0 {
@@ -51,7 +58,7 @@ type genericWallet interface {
 
 type genericServer struct {
 	w  genericWallet
-	tp wallet.TransactionPool
+	tp TransactionPool
 }
 
 func (s *genericServer) addressesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -281,7 +288,7 @@ func (s *genericServer) utxosHandler(w http.ResponseWriter, req *http.Request, _
 
 // Generic API
 
-func newGenericServer(w genericWallet, tp wallet.TransactionPool) *httprouter.Router {
+func newGenericServer(w genericWallet, tp TransactionPool) *httprouter.Router {
 	s := genericServer{
 		w:  w,
 		tp: tp,
@@ -335,7 +342,7 @@ func (s *seedServer) signHandler(w http.ResponseWriter, req *http.Request, _ htt
 }
 
 // NewSeedServer returns an HTTP handler that serves the seed wallet API.
-func NewSeedServer(w *wallet.SeedWallet, tp wallet.TransactionPool) http.Handler {
+func NewSeedServer(w *wallet.SeedWallet, tp TransactionPool) http.Handler {
 	s := &seedServer{w}
 	mux := newGenericServer(w, tp)
 	mux.POST("/nextaddress", s.nextaddressHandler)
@@ -389,7 +396,7 @@ func (s *watchSeedServer) addressesaddrHandlerDELETE(w http.ResponseWriter, req 
 
 // NewWatchSeedServer returns an HTTP handler that serves the watch-only
 // seed-based wallet API.
-func NewWatchSeedServer(w *wallet.WatchOnlyWallet, tp wallet.TransactionPool) http.Handler {
+func NewWatchSeedServer(w *wallet.WatchOnlyWallet, tp TransactionPool) http.Handler {
 	s := &watchSeedServer{w}
 	mux := newGenericServer(watchSeedInfoWallet{w}, tp)
 	mux.POST("/addresses", s.addressesHandlerPOST)
