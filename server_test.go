@@ -13,7 +13,7 @@ import (
 	"gitlab.com/NebulousLabs/Sia/crypto"
 	"gitlab.com/NebulousLabs/Sia/modules"
 	"gitlab.com/NebulousLabs/Sia/types"
-	"gitlab.com/NebulousLabs/fastrand"
+	"lukechampine.com/frand"
 	"lukechampine.com/us/wallet"
 )
 
@@ -50,7 +50,7 @@ func (m *mockCS) sendTxn(txn types.Transaction) {
 		}},
 		SiacoinOutputDiffs: outputs,
 	}
-	fastrand.Read(cc.ID[:])
+	frand.Read(cc.ID[:])
 	m.subscriber.ProcessConsensusChange(cc)
 	m.height++
 }
@@ -80,7 +80,7 @@ func (m *mockCS) mineBlock(fees types.Currency, addr types.UnlockHash) {
 			ID:            dsco.ID,
 		})
 	}
-	fastrand.Read(cc.ID[:])
+	frand.Read(cc.ID[:])
 	m.subscriber.ProcessConsensusChange(cc)
 	m.height++
 	if m.dscos == nil {
@@ -114,7 +114,7 @@ func (m *mockCS) formContract(payout types.Currency, addr types.UnlockHash) {
 			Direction:    modules.DiffApply,
 		}},
 	}
-	fastrand.Read(cc.ID[:])
+	frand.Read(cc.ID[:])
 	m.subscriber.ProcessConsensusChange(cc)
 	m.height++
 	if m.filecontracts == nil {
@@ -161,7 +161,7 @@ func (m *mockCS) reviseContract(id types.FileContractID) {
 			},
 		},
 	}
-	fastrand.Read(cc.ID[:])
+	frand.Read(cc.ID[:])
 	m.subscriber.ProcessConsensusChange(cc)
 	m.height++
 	m.filecontracts[id] = fc
@@ -472,7 +472,7 @@ func TestSeedServerThreadSafety(t *testing.T) {
 	for _, fn := range funcs {
 		go func(fn func()) {
 			for i := 0; i < 10; i++ {
-				time.Sleep(time.Duration(fastrand.Intn(10)) * time.Millisecond)
+				time.Sleep(time.Duration(frand.Intn(10)) * time.Millisecond)
 				fn()
 			}
 			wg.Done()
@@ -688,7 +688,7 @@ func TestWatchServerThreadSafety(t *testing.T) {
 	for _, fn := range funcs {
 		go func(fn func()) {
 			for i := 0; i < 10; i++ {
-				time.Sleep(time.Duration(fastrand.Intn(10)) * time.Millisecond)
+				time.Sleep(time.Duration(frand.Intn(10)) * time.Millisecond)
 				fn()
 			}
 			wg.Done()
