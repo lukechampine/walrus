@@ -20,7 +20,7 @@ API docs for the server are available [here](https://lukechampine.com/docs/walru
 ## Usage
 
 To start the server in hot wallet mode, first you'll need to generate a seed
-with `walrus seed`. (Don't be alarmed: `walrus` seeds are only 15 words long.)
+with `walrus seed`. (Don't be alarmed: `walrus` seeds are only 12 words long.)
 Then start the server with `walrus start` and enter your seed at the prompt. You
 can bypass the prompt by storing your seed in the `WALRUS_SEED` environment
 variable. You may then use the hot wallet API routes.
