@@ -226,7 +226,7 @@ func start(seed wallet.Seed, dir string, APIaddr string) error {
 	}
 	sm := wallet.NewSeedManager(seed, store.SeedIndex())
 	w := wallet.NewSeedWallet(sm, store)
-	err = cs.ConsensusSetSubscribe(w, store.ConsensusChangeID(), nil)
+	err = cs.ConsensusSetSubscribe(w.ConsensusSetSubscriber(store), store.ConsensusChangeID(), nil)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func startWatchOnly(dir string, APIaddr string) error {
 		return err
 	}
 	w := wallet.NewWatchOnlyWallet(store)
-	err = cs.ConsensusSetSubscribe(w, store.ConsensusChangeID(), nil)
+	err = cs.ConsensusSetSubscribe(w.ConsensusSetSubscriber(store), store.ConsensusChangeID(), nil)
 	if err != nil {
 		return err
 	}
