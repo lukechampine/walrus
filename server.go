@@ -106,6 +106,13 @@ func (s *genericServer) broadcastHandler(w http.ResponseWriter, req *http.Reques
 		http.Error(w, "Transaction set is empty", http.StatusBadRequest)
 		return
 	}
+	// check for duplicate transactions
+	for _, txn := range txnSet {
+		if _, ok := s.w.Transaction(txn.ID()); ok {
+			http.Error(w, "Transaction "+txn.ID().String()+" is already in the blockchain", http.StatusBadRequest)
+			return
+		}
+	}
 
 	// submit the transaction set (ignoring duplicate error -- if the set is
 	// already in the tpool, great)
