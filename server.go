@@ -11,7 +11,6 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"gitlab.com/NebulousLabs/Sia/crypto"
-	"gitlab.com/NebulousLabs/Sia/encoding"
 	"gitlab.com/NebulousLabs/Sia/modules"
 	"gitlab.com/NebulousLabs/Sia/types"
 	"lukechampine.com/us/wallet"
@@ -360,23 +359,6 @@ func NewSeedServer(w *wallet.SeedWallet, tp TransactionPool) http.Handler {
 
 // Watch-Only Wallet API
 
-// need to override (WatchOnlyWallet).AddressInfo to satisfy genericWallet
-type watchSeedInfoWallet struct {
-	*wallet.WatchOnlyWallet
-}
-
-func (w watchSeedInfoWallet) AddressInfo(addr types.UnlockHash) (wallet.SeedAddressInfo, bool) {
-	info := w.WatchOnlyWallet.AddressInfo(addr)
-	if info == nil {
-		return wallet.SeedAddressInfo{}, false
-	}
-	var entry wallet.SeedAddressInfo
-	if err := encoding.Unmarshal(info, &entry); err != nil {
-		panic(err)
-	}
-	return entry, true
-}
-
 type watchSeedServer struct {
 	w *wallet.WatchOnlyWallet
 }
@@ -387,9 +369,8 @@ func (s *watchSeedServer) addressesHandlerPOST(w http.ResponseWriter, req *http.
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	addr := info.UnlockConditions.UnlockHash()
-	s.w.AddAddress(addr, encoding.Marshal(info))
-	writeJSON(w, addr)
+	s.w.AddAddress(info)
+	writeJSON(w, wallet.CalculateUnlockHash(info.UnlockConditions))
 }
 
 func (s *watchSeedServer) addressesaddrHandlerDELETE(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
@@ -405,7 +386,7 @@ func (s *watchSeedServer) addressesaddrHandlerDELETE(w http.ResponseWriter, req 
 // seed-based wallet API.
 func NewWatchSeedServer(w *wallet.WatchOnlyWallet, tp TransactionPool) http.Handler {
 	s := &watchSeedServer{w}
-	mux := newGenericServer(watchSeedInfoWallet{w}, tp)
+	mux := newGenericServer(w, tp)
 	mux.POST("/addresses", s.addressesHandlerPOST)
 	mux.DELETE("/addresses/:addr", s.addressesaddrHandlerDELETE)
 	return mux

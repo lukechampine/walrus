@@ -223,7 +223,7 @@ func TestSeedServer(t *testing.T) {
 	sm := wallet.NewSeedManager(wallet.Seed{}, store.SeedIndex())
 	w := wallet.NewSeedWallet(sm, store)
 	cs := new(mockCS)
-	cs.ConsensusSetSubscribe(w, store.ConsensusChangeID(), nil)
+	cs.ConsensusSetSubscribe(w.ConsensusSetSubscriber(store), store.ConsensusChangeID(), nil)
 	client, stop := runSeedServer(NewSeedServer(w, stubTpool{}))
 	defer stop()
 
@@ -373,7 +373,9 @@ func TestSeedServer(t *testing.T) {
 
 	// the spent outputs should appear in the limbo transaction
 	limbo, err := client.LimboTransactions()
-	if len(limbo) != 1 {
+	if err != nil {
+		t.Fatal(err)
+	} else if len(limbo) != 1 {
 		t.Fatal("should have one transaction in limbo")
 	} else if len(limbo[0].SiacoinInputs) != 2 {
 		t.Fatal("limbo transaction should have two inputs")
@@ -447,7 +449,7 @@ func TestSeedServerThreadSafety(t *testing.T) {
 	sm := wallet.NewSeedManager(wallet.Seed{}, store.SeedIndex())
 	w := wallet.NewSeedWallet(sm, store)
 	cs := new(mockCS)
-	cs.ConsensusSetSubscribe(w, store.ConsensusChangeID(), nil)
+	cs.ConsensusSetSubscribe(w.ConsensusSetSubscriber(store), store.ConsensusChangeID(), nil)
 	client, stop := runSeedServer(NewSeedServer(w, stubTpool{}))
 	defer stop()
 
@@ -505,7 +507,7 @@ func TestWatchSeedServer(t *testing.T) {
 
 	w := wallet.NewWatchOnlyWallet(store)
 	cs := new(mockCS)
-	cs.ConsensusSetSubscribe(w, store.ConsensusChangeID(), nil)
+	cs.ConsensusSetSubscribe(w.ConsensusSetSubscriber(store), store.ConsensusChangeID(), nil)
 	client, stop := runWatchSeedServer(NewWatchSeedServer(w, stubTpool{}))
 	defer stop()
 
@@ -630,7 +632,9 @@ func TestWatchSeedServer(t *testing.T) {
 
 	// the spent outputs should appear in the limbo transaction
 	limbo, err := client.LimboTransactions()
-	if len(limbo) != 1 {
+	if err != nil {
+		t.Fatal(err)
+	} else if len(limbo) != 1 {
 		t.Fatal("should have one transaction in limbo")
 	} else if len(limbo[0].SiacoinInputs) != 2 {
 		t.Fatal("limbo transaction should have two inputs", len(limbo[0].SiacoinOutputs))
@@ -656,7 +660,7 @@ func TestWatchServerThreadSafety(t *testing.T) {
 	store := wallet.NewEphemeralWatchOnlyStore()
 	w := wallet.NewWatchOnlyWallet(store)
 	cs := new(mockCS)
-	cs.ConsensusSetSubscribe(w, store.ConsensusChangeID(), nil)
+	cs.ConsensusSetSubscribe(w.ConsensusSetSubscriber(store), store.ConsensusChangeID(), nil)
 	client, stop := runWatchSeedServer(NewWatchSeedServer(w, stubTpool{}))
 	defer stop()
 
@@ -664,8 +668,9 @@ func TestWatchServerThreadSafety(t *testing.T) {
 		info.UnlockConditions = wallet.StandardUnlockConditions(wallet.NewSeed().PublicKey(0))
 		return
 	}
-	addr := randomAddr().UnlockConditions.UnlockHash()
-	w.AddAddress(addr, nil)
+	info := randomAddr()
+	addr := wallet.CalculateUnlockHash(info.UnlockConditions)
+	w.AddAddress(info)
 
 	txn := types.Transaction{
 		SiacoinOutputs: []types.SiacoinOutput{
