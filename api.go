@@ -100,12 +100,6 @@ type encodedTransaction struct {
 	} `json:"transactionSignatures,omitempty"`
 }
 
-// RequestSign is the request type for the /sign endpoint.
-type RequestSign struct {
-	Transaction types.Transaction `json:"transaction"`
-	ToSign      []int             `json:"toSign"`
-}
-
 type responseAddressesAddr wallet.SeedAddressInfo
 
 // MarshalJSON implements json.Marshaler.
@@ -191,20 +185,6 @@ func (r responseFileContracts) MarshalJSON() ([]byte, error) {
 		enc[i].RevisionNumber = r[i].RevisionNumber
 	}
 	return json.Marshal(enc)
-}
-
-// responseSign is the response type for the /sign endpoint.
-type responseSign types.Transaction
-
-// MarshalJSON implements json.Marshaler.
-func (r responseSign) MarshalJSON() ([]byte, error) {
-	return json.Marshal(*(*encodedTransaction)(unsafe.Pointer(&r)))
-}
-
-// RequestTransactions is the request type for the /transactions endpoint.
-type RequestTransactions struct {
-	Max     *int              // optional
-	Address *types.UnlockHash // optional
 }
 
 // ResponseTransactionsID is the response type for the /transactions/:id

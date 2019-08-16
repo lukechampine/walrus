@@ -9,9 +9,9 @@ search: true
 
 # Introduction
 
-This page describes the `walrus` HTTP API. `walrus` is a seed-based wallet that
-can be used as a traditional hot wallet or as part of a cold wallet/watch-only
-wallet setup. Like the rest of the `us` project, `walrus` presents a low-level
+This page describes the `walrus` HTTP API. `walrus` is an unprivileged wallet
+server that tracks transactions and spendable outputs associated with a set of
+addresses. Like the rest of the `us` project, `walrus` presents a low-level
 interface and is targeted towards developers, not end-users. The goal is to
 provide a flexible, performant API that is suitable for exchanges, web wallets,
 and other applications that require precise control of their siacoins.
@@ -22,10 +22,85 @@ and other applications that require precise control of their siacoins.
 The `walrus` API is currently unauthenticated.
 
 
-# Generic Wallet API
+# Routes
 
-`walrus` can be run as a hot wallet or as a watch-only wallet. The following
-routes are available in either mode.
+## Add an Address
+
+> Example Request:
+
+```shell
+curl "localhost:9380/addresses" \
+  -X POST \
+  -d '{
+    "unlockConditions": {
+        "publicKeys": [ "ed25519:fa48a995dc17f978916d334afb0a28d04215a40fddc33db10d8a17b2ca93f6d4" ],
+        "signaturesRequired": 1
+    },
+    "keyIndex": 1
+  }'
+```
+
+> Example Response:
+
+```json
+"8066f825fd680559acba2c14ca7e8b0f4aa5e8a1eece3908485953d6a2e8ce3b991322eaf7d1"
+```
+
+Adds a set of unlock conditions to the wallet, returning the corresponding
+address. Future transactions and outputs relevant to this address will be
+recorded.
+
+<aside class="warning">
+Adding an address does NOT import transactions and outputs relevant to that
+address that are already in the blockchain. To accomplish this, you must rescan
+the blockchain.
+</aside>
+
+### HTTP Request
+
+`POST http://localhost:9380/addresses`
+
+### Errors
+
+  Code | Description
+-------|------------
+  400  | Invalid unlock conditions or key index
+
+
+## Remove an Address
+
+> Example Request:
+
+```shell
+curl "localhost:9380/addresses/8066f825fd680559acba2c14ca7e8b0f4aa5e8a1eece3908485953d6a2e8ce3b991322eaf7d1" \
+  -X DELETE
+```
+
+Removes an address from the wallet. Future transactions and outputs relevant to
+this address will not be recorded.
+
+<aside class="warning">
+Removing an address does NOT remove transactions and outputs relevant to that
+address that are already recorded in the wallet. To accomplish this, you must
+rescan the blockchain.
+</aside>
+
+### HTTP Request
+
+`DELETE http://localhost:9380/addresses/<addr>`
+
+### URL Parameters
+
+Parameter | Description
+----------|------------
+   addr   | The address to remove
+
+### Errors
+
+  Code | Description
+-------|------------
+  400  | Invalid address
+
 
 ## List Addresses
 
@@ -950,42 +1025,6 @@ broadcast.
 None
 
 
-# Hot Wallet API
-
-Hot wallets have all of the routes of [generic wallets](#generic-wallet-api),
-but are also capable of generating new addresses and signing transactions.
-
-## Generate a New Address
-
-> Example Request:
-
-```shell
-curl "localhost:9380/nextaddress" \
-  -X POST
-```
-
-> Example Response:
-
-```json
-"cfb5d86e10e55810187abd06ca5463f267b60d463fc6af104f7b0f5623248e104fe3b4fb0d5e"
-```
-
-Generates a new address from the wallet's seed. The address will also appear in
-[`/addresses`](#list-addresses).
-
-<aside class="notice">
-Generating a new address increments the seed index.
-</aside>
-
-### HTTP Request
-
-`POST http://localhost:9380/nextaddress`
-
-### Errors
-
-None
-
-
 ## Get the Current Seed Index
 
 > Example Request:
@@ -1000,9 +1039,7 @@ curl "localhost:9380/seedindex"
 3
 ```
 
-Returns the wallet's current seed index. This index will be used to derive the
-next address. It is equal to the number of addresses reported by
-[`/addresses`](#list-addresses).
+Returns the seed index that should be used to derive the next address.
 
 ### HTTP Request
 
@@ -1011,184 +1048,6 @@ next address. It is equal to the number of addresses reported by
 ### Errors
 
 None
-
-
-## Sign a Transaction
-
-> Example Request:
-
-```shell
-curl "localhost:9380/sign" \
-  -X POST \
-  -d '{
-    "transaction": {
-      "siacoinInputs": [{
-        "parentID": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
-        "unlockConditions": {
-          "publicKeys": [ "ed25519:8408ad8d5e7f605995bdf9ab13e5c0d84fbe1fc610c141e0578c7d26d5cfee75" ],
-          "signaturesRequired": 1
-        }
-      }],
-      "siacoinOutputs": [{
-        "value": "100000000000000000000000000000",
-        "unlockHash": "df1b42c80b5f7a67331893fde0923a5071d6d7dff4c78baec547cf5ca4d314a1d78b6b1c8d42"
-      }],
-      "minerFees": [ "13000000000000000000000000000" ]
-    }
-  }'
-```
-
-> By default, the wallet will add a transaction signature for every input it
-> controls. Alternatively, you may use `toSign` to specify which signatures to
-> fill in:
-
-```shell
-curl "localhost:9380/sign" \
-  -X POST \
-  -d '{
-    "transaction": {
-      "siacoinInputs": [{
-        "parentID": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
-        "unlockConditions": {
-          "publicKeys": [ "ed25519:8408ad8d5e7f605995bdf9ab13e5c0d84fbe1fc610c141e0578c7d26d5cfee75" ],
-          "signaturesRequired": 1
-        }
-      }],
-      "siacoinOutputs": [{
-        "value": "100000000000000000000000000000",
-        "unlockHash": "df1b42c80b5f7a67331893fde0923a5071d6d7dff4c78baec547cf5ca4d314a1d78b6b1c8d42"
-      }],
-      "minerFees": [ "13000000000000000000000000000" ],
-      "transactionSignatures": [{
-        "parentID": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
-        "publicKeyIndex": 0,
-        "coveredFields": { "wholeTransaction": true },
-      }]
-    },
-    "toSign": [ 0 ]
-  }'
-```
-
-> Example Response:
-
-```json
-{
-  "siacoinInputs": [{
-    "parentID": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
-    "unlockConditions": {
-      "publicKeys": [ "ed25519:8408ad8d5e7f605995bdf9ab13e5c0d84fbe1fc610c141e0578c7d26d5cfee75" ],
-      "signaturesRequired": 1
-    }
-  }],
-  "siacoinOutputs": [{
-    "value": "100000000000000000000000000000",
-    "unlockHash": "df1b42c80b5f7a67331893fde0923a5071d6d7dff4c78baec547cf5ca4d314a1d78b6b1c8d42"
-  }],
-  "minerFees": [ "13000000000000000000000000000" ],
-  "transactionSignatures": [{
-    "parentID": "b8c63a8f435bfff7bf8c1f6c7ece0066599fa4e08cb74ab5929e84b014e408c8",
-    "publicKeyIndex": 0,
-    "coveredFields": { "wholeTransaction": true },
-    "signature": "rFtBFv9oeScpO3mhp6O2liMwBKYXn05SaOmzhhjQtIkOwAClaJTpLEKn3U26zYis2AG2tH2idWSJNZXNSVa8DQ=="
-  }]
-}
-```
-
-Signs the supplied transaction using keys derived from the wallet's seed.
-
-### HTTP Request
-
-`POST http://localhost:9380/sign`
-
-### Errors
-
-  Code | Description
--------|------------
-  400  | Transaction is invalid or wallet does not possess signing key
-
-
-# Watch-Only Wallet API
-
-Watch-only wallets have all of the routes of [generic wallets](#generic-wallet-api),
-as well as the ability to track arbitrary addresses. Unlike hot wallets,
-watch-only wallets cannot generate new addresses or sign transactions.
-
-## Import an Address
-
-> Example Request:
-
-```shell
-curl "localhost:9380/addresses" \
-  -X POST \
-  -d '{
-    "unlockConditions": {
-        "publicKeys": [ "ed25519:fa48a995dc17f978916d334afb0a28d04215a40fddc33db10d8a17b2ca93f6d4" ],
-        "signaturesRequired": 1
-    },
-    "keyIndex": 1
-  }'
-```
-
-> Example Response:
-
-```json
-"8066f825fd680559acba2c14ca7e8b0f4aa5e8a1eece3908485953d6a2e8ce3b991322eaf7d1"
-```
-
-Adds a set of unlock conditions to the wallet, returning the corresponding
-address. Future transactions and outputs relevant to this address will be
-recorded.
-
-<aside class="warning">
-Importing an address does NOT import transactions and outputs relevant to that
-address that are already in the blockchain. To accomplish this, you must rescan
-the blockchain.
-</aside>
-
-### HTTP Request
-
-`POST http://localhost:9380/addresses`
-
-### Errors
-
-  Code | Description
--------|------------
-  400  | Invalid unlock conditions or key index
-
-
-## Remove an Address
-
-> Example Request:
-
-```shell
-curl "localhost:9380/addresses/8066f825fd680559acba2c14ca7e8b0f4aa5e8a1eece3908485953d6a2e8ce3b991322eaf7d1" \
-  -X DELETE
-```
-
-Removes an address from the wallet. Future transactions and outputs relevant to
-this address will not be recorded.
-
-<aside class="warning">
-Removing an address does NOT remove transactions and outputs relevant to that
-address that are already recorded in the wallet. To accomplish this, you must
-rescan the blockchain.
-</aside>
-
-### HTTP Request
-
-`DELETE http://localhost:9380/addresses/<addr>`
-
-### URL Parameters
-
-Parameter | Description
-----------|------------
-   addr   | The address to remove
-
-### Errors
-
-  Code | Description
--------|------------
-  400  | Invalid address
 
 
 # Limbo
@@ -1266,9 +1125,7 @@ transaction. The `parentID` identifies which output is being spent, and the
 address). Unlock conditions consist of a set of `publicKeys`, a number of
 `signaturesRequired`, and a `timelock`. The vast majority of unlock conditions
 use a single public key and no timelock (i.e. a timelock of 0); these are known
-as "standard unlock conditions." The addresses returned by
-[`/nextaddress`](#generate-a-new-address) always have standard unlock
-conditions.
+as "standard unlock conditions."
 
 Next come the `siacoinOutputs`. Each output specifies an `unlockHash` (address)
 and a `value` of coins to send to that address. When these outputs are later

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
-	"unsafe"
 
 	"github.com/julienschmidt/httprouter"
 	"gitlab.com/NebulousLabs/Sia/crypto"
@@ -34,37 +33,16 @@ func writeJSON(w io.Writer, v interface{}) {
 	enc.Encode(v)
 }
 
-type genericWallet interface {
-	Addresses() []types.UnlockHash
-	AddressInfo(addr types.UnlockHash) (wallet.SeedAddressInfo, bool)
-	Balance(limbo bool) types.Currency
-	BlockRewards(n int) []wallet.BlockReward
-	ChainHeight() types.BlockHeight
-	ConsensusChangeID() modules.ConsensusChangeID
-	FileContracts(n int) []wallet.FileContract
-	FileContractHistory(id types.FileContractID) []wallet.FileContract
-	LimboTransactions() []wallet.LimboTransaction
-	AddToLimbo(txn types.Transaction)
-	RemoveFromLimbo(txid types.TransactionID)
-	Memo(txid types.TransactionID) []byte
-	OwnsAddress(addr types.UnlockHash) bool
-	SetMemo(txid types.TransactionID, memo []byte)
-	Transaction(id types.TransactionID) (types.Transaction, bool)
-	Transactions(n int) []types.TransactionID
-	TransactionsByAddress(addr types.UnlockHash, n int) []types.TransactionID
-	UnspentOutputs(limbo bool) []wallet.UnspentOutput
-}
-
-type genericServer struct {
-	w  genericWallet
+type server struct {
+	w  *wallet.WatchOnlyWallet
 	tp TransactionPool
 }
 
-func (s *genericServer) addressesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) addressesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	writeJSON(w, s.w.Addresses())
 }
 
-func (s *genericServer) addressesaddrHandlerGET(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+func (s *server) addressesaddrHandlerGET(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	var addr types.UnlockHash
 	if err := addr.LoadString(ps.ByName("addr")); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -78,12 +56,31 @@ func (s *genericServer) addressesaddrHandlerGET(w http.ResponseWriter, req *http
 	writeJSON(w, responseAddressesAddr(info))
 }
 
-func (s *genericServer) balanceHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) addressesHandlerPOST(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	var info wallet.SeedAddressInfo
+	if err := json.NewDecoder(req.Body).Decode(&info); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.w.AddAddress(info)
+	writeJSON(w, wallet.CalculateUnlockHash(info.UnlockConditions))
+}
+
+func (s *server) addressesaddrHandlerDELETE(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	var addr types.UnlockHash
+	if err := addr.LoadString(ps.ByName("addr")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.w.RemoveAddress(addr)
+}
+
+func (s *server) balanceHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	limbo := req.FormValue("limbo") == "true"
 	writeJSON(w, s.w.Balance(limbo))
 }
 
-func (s *genericServer) blockrewardsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) blockrewardsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	max := -1
 	if req.FormValue("max") != "" {
 		var err error
@@ -96,7 +93,7 @@ func (s *genericServer) blockrewardsHandler(w http.ResponseWriter, req *http.Req
 	writeJSON(w, responseBlockRewards(s.w.BlockRewards(max)))
 }
 
-func (s *genericServer) broadcastHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) broadcastHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	var txnSet []types.Transaction
 	if err := json.NewDecoder(req.Body).Decode(&txnSet); err != nil {
 		http.Error(w, "Could not parse transaction: "+err.Error(), http.StatusBadRequest)
@@ -127,19 +124,19 @@ func (s *genericServer) broadcastHandler(w http.ResponseWriter, req *http.Reques
 	}
 }
 
-func (s *genericServer) consensusHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) consensusHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	writeJSON(w, ResponseConsensus{
 		Height: s.w.ChainHeight(),
 		CCID:   crypto.Hash(s.w.ConsensusChangeID()),
 	})
 }
 
-func (s *genericServer) feeHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) feeHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	median, _ := s.tp.FeeEstimation()
 	writeJSON(w, median)
 }
 
-func (s *genericServer) filecontractsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) filecontractsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	max := -1
 	if req.FormValue("max") != "" {
 		var err error
@@ -152,7 +149,7 @@ func (s *genericServer) filecontractsHandler(w http.ResponseWriter, req *http.Re
 	writeJSON(w, responseFileContracts(s.w.FileContracts(max)))
 }
 
-func (s *genericServer) filecontractsidHandler(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+func (s *server) filecontractsidHandler(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	var id types.FileContractID
 	if err := id.LoadString(ps.ByName("id")); err != nil {
 		http.Error(w, "Invalid ID: "+err.Error(), http.StatusBadRequest)
@@ -161,11 +158,11 @@ func (s *genericServer) filecontractsidHandler(w http.ResponseWriter, req *http.
 	writeJSON(w, responseFileContracts(s.w.FileContractHistory(id)))
 }
 
-func (s *genericServer) limboHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) limboHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	writeJSON(w, responseLimbo(s.w.LimboTransactions()))
 }
 
-func (s *genericServer) limboHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+func (s *server) limboHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	var txn types.Transaction
 	if err := json.NewDecoder(req.Body).Decode(&txn); err != nil {
 		http.Error(w, "Could not parse transaction: "+err.Error(), http.StatusBadRequest)
@@ -174,7 +171,7 @@ func (s *genericServer) limboHandlerPUT(w http.ResponseWriter, req *http.Request
 	s.w.AddToLimbo(txn)
 }
 
-func (s *genericServer) limboHandlerDELETE(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+func (s *server) limboHandlerDELETE(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	var txid types.TransactionID
 	if err := (*crypto.Hash)(&txid).LoadString(ps.ByName("id")); err != nil {
 		http.Error(w, "Invalid ID: "+err.Error(), http.StatusBadRequest)
@@ -183,7 +180,7 @@ func (s *genericServer) limboHandlerDELETE(w http.ResponseWriter, req *http.Requ
 	s.w.RemoveFromLimbo(txid)
 }
 
-func (s *genericServer) memosHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+func (s *server) memosHandlerPUT(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	var txid types.TransactionID
 	if err := (*crypto.Hash)(&txid).LoadString(ps.ByName("txid")); err != nil {
 		http.Error(w, "Invalid transaction ID: "+err.Error(), http.StatusBadRequest)
@@ -197,7 +194,7 @@ func (s *genericServer) memosHandlerPUT(w http.ResponseWriter, req *http.Request
 	s.w.SetMemo(txid, body)
 }
 
-func (s *genericServer) memosHandlerGET(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+func (s *server) memosHandlerGET(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	var txid types.TransactionID
 	if err := (*crypto.Hash)(&txid).LoadString(ps.ByName("txid")); err != nil {
 		http.Error(w, "Invalid transaction ID: "+err.Error(), http.StatusBadRequest)
@@ -206,7 +203,11 @@ func (s *genericServer) memosHandlerGET(w http.ResponseWriter, req *http.Request
 	w.Write(s.w.Memo(txid))
 }
 
-func (s *genericServer) transactionsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) seedindexHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	writeJSON(w, s.w.SeedIndex())
+}
+
+func (s *server) transactionsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	max := -1 // all txns
 	if req.FormValue("max") != "" {
 		var err error
@@ -231,7 +232,7 @@ func (s *genericServer) transactionsHandler(w http.ResponseWriter, req *http.Req
 	writeJSON(w, resp)
 }
 
-func (s *genericServer) transactionsidHandler(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+func (s *server) transactionsidHandler(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	var txid crypto.Hash
 	if err := txid.LoadString(ps.ByName("txid")); err != nil {
 		http.Error(w, "Invalid transaction ID: "+err.Error(), http.StatusBadRequest)
@@ -263,7 +264,7 @@ func (s *genericServer) transactionsidHandler(w http.ResponseWriter, req *http.R
 	})
 }
 
-func (s *genericServer) unconfirmedparentsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) unconfirmedparentsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	var txn types.Transaction
 	if err := json.NewDecoder(req.Body).Decode(&txn); err != nil {
 		http.Error(w, "Could not parse transaction: "+err.Error(), http.StatusBadRequest)
@@ -272,7 +273,7 @@ func (s *genericServer) unconfirmedparentsHandler(w http.ResponseWriter, req *ht
 	writeJSON(w, wallet.UnconfirmedParents(txn, s.w.LimboTransactions()))
 }
 
-func (s *genericServer) utxosHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (s *server) utxosHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	limbo := req.FormValue("limbo") == "true"
 	outputs := s.w.UnspentOutputs(limbo)
 	utxos := make([]UTXO, len(outputs))
@@ -292,16 +293,17 @@ func (s *genericServer) utxosHandler(w http.ResponseWriter, req *http.Request, _
 	writeJSON(w, utxos)
 }
 
-// Generic API
-
-func newGenericServer(w genericWallet, tp TransactionPool) *httprouter.Router {
-	s := genericServer{
+// NewServer returns an HTTP handler that serves the walrus API.
+func NewServer(w *wallet.WatchOnlyWallet, tp TransactionPool) http.Handler {
+	s := server{
 		w:  w,
 		tp: tp,
 	}
 	mux := httprouter.New()
 	mux.GET("/addresses", s.addressesHandler)
+	mux.POST("/addresses", s.addressesHandlerPOST)
 	mux.GET("/addresses/:addr", s.addressesaddrHandlerGET)
+	mux.DELETE("/addresses/:addr", s.addressesaddrHandlerDELETE)
 	mux.GET("/balance", s.balanceHandler)
 	mux.GET("/blockrewards", s.blockrewardsHandler)
 	mux.POST("/broadcast", s.broadcastHandler)
@@ -314,80 +316,10 @@ func newGenericServer(w genericWallet, tp TransactionPool) *httprouter.Router {
 	mux.DELETE("/limbo/:id", s.limboHandlerDELETE)
 	mux.PUT("/memos/:txid", s.memosHandlerPUT)
 	mux.GET("/memos/:txid", s.memosHandlerGET)
+	mux.GET("/seedindex", s.seedindexHandler)
 	mux.GET("/transactions", s.transactionsHandler)
 	mux.GET("/transactions/:txid", s.transactionsidHandler)
 	mux.POST("/unconfirmedparents", s.unconfirmedparentsHandler)
 	mux.GET("/utxos", s.utxosHandler)
-	return mux
-}
-
-// Hot Wallet API
-
-type seedServer struct {
-	w *wallet.SeedWallet
-}
-
-func (s *seedServer) nextaddressHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	writeJSON(w, s.w.NextAddress())
-}
-
-func (s *seedServer) seedindexHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	writeJSON(w, s.w.SeedIndex())
-}
-
-func (s *seedServer) signHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	var rs RequestSign
-	if err := json.NewDecoder(req.Body).Decode(&rs); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	} else if err := s.w.SignTransaction(&rs.Transaction, rs.ToSign); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, (*encodedTransaction)(unsafe.Pointer(&rs.Transaction)))
-}
-
-// NewSeedServer returns an HTTP handler that serves the seed wallet API.
-func NewSeedServer(w *wallet.SeedWallet, tp TransactionPool) http.Handler {
-	s := &seedServer{w}
-	mux := newGenericServer(w, tp)
-	mux.POST("/nextaddress", s.nextaddressHandler)
-	mux.GET("/seedindex", s.seedindexHandler)
-	mux.POST("/sign", s.signHandler)
-	return mux
-}
-
-// Watch-Only Wallet API
-
-type watchSeedServer struct {
-	w *wallet.WatchOnlyWallet
-}
-
-func (s *watchSeedServer) addressesHandlerPOST(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var info wallet.SeedAddressInfo
-	if err := json.NewDecoder(req.Body).Decode(&info); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	s.w.AddAddress(info)
-	writeJSON(w, wallet.CalculateUnlockHash(info.UnlockConditions))
-}
-
-func (s *watchSeedServer) addressesaddrHandlerDELETE(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var addr types.UnlockHash
-	if err := addr.LoadString(ps.ByName("addr")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	s.w.RemoveAddress(addr)
-}
-
-// NewWatchSeedServer returns an HTTP handler that serves the watch-only
-// seed-based wallet API.
-func NewWatchSeedServer(w *wallet.WatchOnlyWallet, tp TransactionPool) http.Handler {
-	s := &watchSeedServer{w}
-	mux := newGenericServer(w, tp)
-	mux.POST("/addresses", s.addressesHandlerPOST)
-	mux.DELETE("/addresses/:addr", s.addressesaddrHandlerDELETE)
 	return mux
 }
