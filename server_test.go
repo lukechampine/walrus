@@ -310,10 +310,14 @@ func TestServer(t *testing.T) {
 
 	inputs := make([]wallet.ValuedInput, len(outputs))
 	for i, o := range outputs {
+		info, err := client.AddressInfo(o.UnlockHash)
+		if err != nil {
+			t.Fatal(err)
+		}
 		inputs[i] = wallet.ValuedInput{
 			SiacoinInput: types.SiacoinInput{
 				ParentID:         o.ID,
-				UnlockConditions: o.UnlockConditions,
+				UnlockConditions: info.UnlockConditions,
 			},
 			Value: o.Value,
 		}

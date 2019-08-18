@@ -212,7 +212,7 @@ func (c *Client) UnconfirmedParents(txn types.Transaction) (parents []wallet.Lim
 
 // UnspentOutputs returns the outputs that the wallet can spend. If the limbo
 // flag is true, the outputs will reflect any transactions currently in Limbo.
-func (c *Client) UnspentOutputs(limbo bool) (utxos []UTXO, err error) {
+func (c *Client) UnspentOutputs(limbo bool) (utxos []wallet.UnspentOutput, err error) {
 	err = c.get("/utxos?limbo="+strconv.FormatBool(limbo), &utxos)
 	return
 }

@@ -917,19 +917,11 @@ curl "localhost:9380/utxos?limbo=true"
   {
     "id": "8d16e3de006a57028fd014ab85c2a76a32c5bbd2e1df9340b04795734c9c3372",
     "value": "10000000000000000000000000000",
-    "unlockConditions": {
-      "publicKeys": [ "ed25519:0ea4e46899fe246e14122e3ca5865a7006d99086c52b1c63ab0e32226e56a7a1" ],
-      "signaturesRequired": 1
-    },
     "unlockHash": "5ac6af95fe284b4bbb0110ef51d3c90f3e9ea37586352ec83bad569230bad7f37a452c0a2a2f"
   },
   {
     "id": "d8412f884e85519a6896cac505b4eceafd16ed79ca5d2d44e0b24a80a9df8083",
     "value": "123000000000000000000000000000",
-    "unlockConditions": {
-      "publicKeys": [ "ed25519:8408ad8d5e7f605995bdf9ab13e5c0d84fbe1fc610c141e0578c7d26d5cfee75" ],
-      "signaturesRequired": 1
-    },
     "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f"
   }
 ]

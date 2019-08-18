@@ -274,23 +274,7 @@ func (s *server) unconfirmedparentsHandler(w http.ResponseWriter, req *http.Requ
 }
 
 func (s *server) utxosHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	limbo := req.FormValue("limbo") == "true"
-	outputs := s.w.UnspentOutputs(limbo)
-	utxos := make([]UTXO, len(outputs))
-	for i, o := range outputs {
-		info, ok := s.w.AddressInfo(o.UnlockHash)
-		if !ok {
-			panic("missing info for " + o.UnlockHash.String())
-		}
-		utxos[i] = UTXO{
-			ID:               o.ID,
-			Value:            o.Value,
-			UnlockConditions: info.UnlockConditions,
-			UnlockHash:       o.UnlockHash,
-			KeyIndex:         info.KeyIndex,
-		}
-	}
-	writeJSON(w, utxos)
+	writeJSON(w, s.w.UnspentOutputs(req.FormValue("limbo") == "true"))
 }
 
 // NewServer returns an HTTP handler that serves the walrus API.
