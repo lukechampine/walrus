@@ -220,7 +220,7 @@ func TestServer(t *testing.T) {
 	defer store.Close()
 	defer os.RemoveAll(dir)
 
-	w := wallet.NewWatchOnlyWallet(store)
+	w := wallet.New(store)
 	cs := new(mockCS)
 	cs.ConsensusSetSubscribe(w.ConsensusSetSubscriber(store), store.ConsensusChangeID(), nil)
 	client, stop := runServer(NewServer(w, stubTpool{}))
@@ -377,7 +377,7 @@ func TestServer(t *testing.T) {
 
 func TestServerThreadSafety(t *testing.T) {
 	store := wallet.NewEphemeralStore()
-	w := wallet.NewWatchOnlyWallet(store)
+	w := wallet.New(store)
 	cs := new(mockCS)
 	cs.ConsensusSetSubscribe(w.ConsensusSetSubscriber(store), store.ConsensusChangeID(), nil)
 	client, stop := runServer(NewServer(w, stubTpool{}))

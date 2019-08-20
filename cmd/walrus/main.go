@@ -109,7 +109,7 @@ func start(dir string, APIaddr string) error {
 	if err != nil {
 		return err
 	}
-	w := wallet.NewWatchOnlyWallet(store)
+	w := wallet.New(store)
 	err = cs.ConsensusSetSubscribe(w.ConsensusSetSubscriber(store), store.ConsensusChangeID(), nil)
 	if err != nil {
 		return err

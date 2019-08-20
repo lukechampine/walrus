@@ -34,7 +34,7 @@ func writeJSON(w io.Writer, v interface{}) {
 }
 
 type server struct {
-	w  *wallet.WatchOnlyWallet
+	w  *wallet.SeedWallet
 	tp TransactionPool
 }
 
@@ -278,7 +278,7 @@ func (s *server) utxosHandler(w http.ResponseWriter, req *http.Request, _ httpro
 }
 
 // NewServer returns an HTTP handler that serves the walrus API.
-func NewServer(w *wallet.WatchOnlyWallet, tp TransactionPool) http.Handler {
+func NewServer(w *wallet.SeedWallet, tp TransactionPool) http.Handler {
 	s := server{
 		w:  w,
 		tp: tp,
