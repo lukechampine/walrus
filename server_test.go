@@ -205,7 +205,7 @@ func runServer(h http.Handler) (*Client, func() error) {
 	}
 	srv := http.Server{Handler: h}
 	go srv.Serve(l)
-	return NewClient(l.Addr().String()), srv.Close
+	return NewClient("http://" + l.Addr().String()), srv.Close
 }
 
 func TestServer(t *testing.T) {
@@ -298,6 +298,8 @@ func TestServer(t *testing.T) {
 		t.Fatal(err)
 	} else if len(htx.Transaction.SiacoinOutputs) != 2 {
 		t.Fatal("transaction should have two outputs")
+	} else if htx.BlockHeight != 1 {
+		t.Fatal("transaction height should be 1")
 	}
 
 	// create an unsigned transaction using available outputs
