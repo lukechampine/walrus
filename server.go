@@ -243,8 +243,8 @@ func (s *server) transactionsidHandler(w http.ResponseWriter, req *http.Request,
 		http.Error(w, "Transaction not found", http.StatusNotFound)
 		return
 	}
-	// calculate inflow/outflow/fee
-	var inflow, outflow, fee types.Currency
+	// calculate inflow/outflow
+	var inflow, outflow types.Currency
 	for _, sco := range txn.SiacoinOutputs {
 		if s.w.OwnsAddress(sco.UnlockHash) {
 			inflow = inflow.Add(sco.Value)
@@ -252,15 +252,14 @@ func (s *server) transactionsidHandler(w http.ResponseWriter, req *http.Request,
 			outflow = outflow.Add(sco.Value)
 		}
 	}
-	for _, c := range txn.MinerFees {
-		fee = fee.Add(c)
-	}
-	outflow = outflow.Add(fee)
 	writeJSON(w, ResponseTransactionsID{
-		Transaction: txn,
+		Transaction: txn.Transaction,
+		BlockID:     txn.BlockID,
+		BlockHeight: txn.BlockHeight,
+		Timestamp:   txn.Timestamp,
+		FeePerByte:  txn.FeePerByte,
 		Inflow:      inflow,
 		Outflow:     outflow,
-		FeePerByte:  fee.Div64(uint64(txn.MarshalSiaSize())),
 	})
 }
 

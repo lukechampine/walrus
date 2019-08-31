@@ -191,17 +191,24 @@ func (r responseFileContracts) MarshalJSON() ([]byte, error) {
 // endpoint.
 type ResponseTransactionsID struct {
 	Transaction types.Transaction `json:"transaction"`
+	BlockID     types.BlockID     `json:"blockID"`
+	BlockHeight types.BlockHeight `json:"blockHeight"`
+	Timestamp   time.Time         `json:"timestamp"`
+	FeePerByte  types.Currency    `json:"feePerByte"`
 	Inflow      types.Currency    `json:"inflow"`
 	Outflow     types.Currency    `json:"outflow"`
-	FeePerByte  types.Currency    `json:"feePerByte"`
 }
 
 // MarshalJSON implements json.Marshaler.
 func (r ResponseTransactionsID) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Transaction encodedTransaction `json:"transaction"`
+		BlockID     types.BlockID      `json:"blockID"`
+		BlockHeight types.BlockHeight  `json:"blockHeight"`
+		Timestamp   time.Time          `json:"timestamp"`
+		FeePerByte  types.Currency     `json:"feePerByte"`
 		Inflow      types.Currency     `json:"inflow"`
 		Outflow     types.Currency     `json:"outflow"`
-		FeePerByte  types.Currency     `json:"feePerByte"`
-	}{*(*encodedTransaction)(unsafe.Pointer(&r.Transaction)), r.Inflow, r.Outflow, r.FeePerByte})
+	}{*(*encodedTransaction)(unsafe.Pointer(&r.Transaction)),
+		r.BlockID, r.BlockHeight, r.Timestamp, r.FeePerByte, r.Inflow, r.Outflow})
 }
