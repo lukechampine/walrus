@@ -2,7 +2,6 @@ package walrus
 
 import (
 	"encoding/json"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -22,7 +21,8 @@ type TransactionPool interface {
 	FeeEstimation() (min types.Currency, max types.Currency)
 }
 
-func writeJSON(w io.Writer, v interface{}) {
+func writeJSON(w http.ResponseWriter, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
 	// encode nil slices as [] instead of null
 	if val := reflect.ValueOf(v); val.Kind() == reflect.Slice && val.Len() == 0 {
 		w.Write([]byte("[]\n"))

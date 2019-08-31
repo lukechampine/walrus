@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"gitlab.com/NebulousLabs/Sia/types"
 	"lukechampine.com/us/wallet"
@@ -24,10 +25,11 @@ func (c *Client) req(method string, route string, data, resp interface{}) error 
 		js, _ := json.Marshal(data)
 		body = bytes.NewReader(js)
 	}
-	req, err := http.NewRequest(method, fmt.Sprintf("http://%v%v", c.addr, route), body)
+	req, err := http.NewRequest(method, fmt.Sprintf("%v%v", c.addr, route), body)
 	if err != nil {
 		panic(err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 	r, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -240,5 +242,9 @@ func (c *Client) RemoveAddress(addr types.UnlockHash) error {
 // NewClient returns a client that communicates with a walrus server listening
 // on the specified address.
 func NewClient(addr string) *Client {
+	// use https by default
+	if !strings.HasPrefix(addr, "https://") && !strings.HasPrefix(addr, "http://") {
+		addr = "https://" + addr
+	}
 	return &Client{addr}
 }
