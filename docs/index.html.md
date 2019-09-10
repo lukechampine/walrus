@@ -875,14 +875,17 @@ curl "localhost:9380/transactions/2936d6eab2272dda76603aa8078be02d979cf52ac3d06c
       "signature": "WbJO3jeLBgzbMZI7D4yx5dNrX5Qw2e3/8lTakL/F23e3DL0nG2O02zUmdlq9466lx9uhfT3ejJOsO1oB3lMZBQ=="
     }]
   },
+  "blockID": "00000000000000002ac0219169abcdfece33725d0a79e77735be27b0932d8be3",
+  "blockHeight": "123456",
+  "timestamp": "2019-08-01T13:17:04.641427-04:00",
+  "feePerByte": "48491379310344827586",
   "inflow": "123000000000000000000000000000",
-  "outflow": "22500000000000000000000",
-  "feePerByte": "48491379310344827586"
+  "outflow": "22500000000000000000000"
 }
 ```
 
-Returns the transaction with the specified ID, as well as inflow, outflow, and
-fee information. The transaction must appear in [`/transactions`](#list-transactions).
+Returns the transaction with the specified ID, along with various useful
+metadata. The transaction must appear in [`/transactions`](#list-transactions).
 
 ### HTTP Request
 
