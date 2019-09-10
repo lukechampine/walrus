@@ -13,6 +13,6 @@ S](https://github.com/LedgerHQ/nanos-app-sia).
 
 API docs for the server are available [here](https://lukechampine.com/docs/walrus).
 
-A client for `walrus` is available [here](https://lukechampine.com/walrus-cli).
+A client for `walrus` is available [here](https://github.com/lukechampine/walrus-cli).
 The client facilitates constructing, signing, and broadcasting transactions, and
 supports both hot wallets and hardware wallets.
