@@ -15,6 +15,7 @@ import (
 	"lukechampine.com/us/wallet"
 )
 
+// A Client communicates with a walrus server.
 type Client struct {
 	addr string
 }
@@ -188,9 +189,9 @@ func (c *Client) Transactions(max int) (txids []types.TransactionID, err error) 
 	return
 }
 
-// Transactions lists the IDs of transactions relevant to the specified address,
-// which must be owned by the wallet. If max < 0, all such IDs are returned;
-// otherwise, at most max IDs are returned. The IDs are ordered
+// TransactionsByAddress lists the IDs of transactions relevant to the specified
+// address, which must be owned by the wallet. If max < 0, all such IDs are
+// returned; otherwise, at most max IDs are returned. The IDs are ordered
 // newest-to-oldest.
 func (c *Client) TransactionsByAddress(addr types.UnlockHash, max int) (txids []types.TransactionID, err error) {
 	err = c.get("/transactions?max="+strconv.Itoa(max)+"&addr="+addr.String(), &txids)

@@ -19,6 +19,7 @@ bench:
 	go test -v -run=XXX -bench=. ./...
 
 lint:
+	@golint ./...
 	@golangci-lint run \
 		--enable-all \
 		--disable=lll \
@@ -30,6 +31,7 @@ lint:
 		--disable=dupl \
 		--disable=errcheck \
 		--disable=gochecknoglobals \
+		--disable=funlen \
 		--skip-dirs=internal \
 		./...
 
