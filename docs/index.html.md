@@ -373,7 +373,7 @@ contracts, storage proofs, siafunds, or multisig inputs.
 
 ### HTTP Request
 
-`GET http://localhost:9380/consensus`
+`GET http://localhost:9380/fee`
 
 ### Errors
 
