@@ -96,7 +96,8 @@ func start(dir string, APIaddr string) error {
 	if err != nil {
 		return err
 	}
-	cs, err := consensus.New(g, true, filepath.Join(dir, "consensus"))
+	cs, errChan := consensus.New(g, true, filepath.Join(dir, "consensus"))
+	err = <-errChan
 	if err != nil {
 		return err
 	}
