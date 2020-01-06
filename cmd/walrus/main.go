@@ -97,7 +97,7 @@ func start(dir string, APIaddr string) error {
 		return err
 	}
 	cs, errChan := consensus.New(g, true, filepath.Join(dir, "consensus"))
-	err = <-errChan
+	err = handleAsyncErr(errChan)
 	if err != nil {
 		return err
 	}
@@ -127,4 +127,19 @@ func reset(dir string) error {
 		return err
 	}
 	return store.Reset()
+}
+
+func handleAsyncErr(errCh <-chan error) error {
+	select {
+	case err := <-errCh:
+		return err
+	default:
+	}
+	go func() {
+		err := <-errCh
+		if err != nil {
+			log.Println("WARNING: consensus initialization returned an error:", err)
+		}
+	}()
+	return nil
 }
