@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/rs/cors"
 	"gitlab.com/NebulousLabs/Sia/crypto"
 	"gitlab.com/NebulousLabs/Sia/modules"
 	"gitlab.com/NebulousLabs/Sia/types"
@@ -304,5 +305,12 @@ func NewServer(w *wallet.SeedWallet, tp TransactionPool) http.Handler {
 	mux.GET("/transactions/:txid", s.transactionsidHandler)
 	mux.POST("/unconfirmedparents", s.unconfirmedparentsHandler)
 	mux.GET("/utxos", s.utxosHandler)
-	return mux
+
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodDelete},
+		AllowCredentials: true,
+	})
+
+	return c.Handler(mux)
 }
