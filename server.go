@@ -23,9 +23,12 @@ type TransactionPool interface {
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	// encode nil slices as [] instead of null
+	// encode nil slices as [] and nil maps as {} (instead of null)
 	if val := reflect.ValueOf(v); val.Kind() == reflect.Slice && val.Len() == 0 {
 		w.Write([]byte("[]\n"))
+		return
+	} else if val.Kind() == reflect.Map && val.Len() == 0 {
+		w.Write([]byte("{}\n"))
 		return
 	}
 	enc := json.NewEncoder(w)
@@ -78,6 +81,56 @@ func (s *server) addressesaddrHandlerDELETE(w http.ResponseWriter, req *http.Req
 func (s *server) balanceHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	limbo := req.FormValue("limbo") == "true"
 	writeJSON(w, s.w.Balance(limbo))
+}
+
+func (s *server) batchqueryHandler(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	switch ps.ByName("endpoint") {
+	case "addresses":
+		var addrs []types.UnlockHash
+		if err := json.NewDecoder(req.Body).Decode(&addrs); err != nil {
+			http.Error(w, "Could not parse addrs: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		infos := make(responseBatchqueryAddresses, len(addrs))
+		for _, addr := range addrs {
+			if info, ok := s.w.AddressInfo(addr); ok {
+				infos[addr] = info
+			}
+		}
+		writeJSON(w, infos)
+	case "transactions":
+		var ids []types.TransactionID
+		if err := json.NewDecoder(req.Body).Decode(&ids); err != nil {
+			http.Error(w, "Could not parse ids: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		txns := make(responseBatchqueryTransactions, len(ids))
+		for _, id := range ids {
+			if txn, ok := s.w.Transaction(id); ok {
+				// calculate inflow/outflow
+				var inflow, outflow types.Currency
+				for _, sco := range txn.SiacoinOutputs {
+					if s.w.OwnsAddress(sco.UnlockHash) {
+						inflow = inflow.Add(sco.Value)
+					} else {
+						outflow = outflow.Add(sco.Value)
+					}
+				}
+				txns[id] = ResponseTransactionsID{
+					Transaction: txn.Transaction,
+					BlockID:     txn.BlockID,
+					BlockHeight: txn.BlockHeight,
+					Timestamp:   txn.Timestamp,
+					FeePerByte:  txn.FeePerByte,
+					Inflow:      inflow,
+					Outflow:     outflow,
+				}
+			}
+		}
+		writeJSON(w, txns)
+	default:
+		http.Error(w, "batchquery endpoint must be one of: addresses, transactions", http.StatusNotFound)
+	}
 }
 
 func (s *server) blockrewardsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -288,6 +341,7 @@ func NewServer(w *wallet.SeedWallet, tp TransactionPool) http.Handler {
 	mux.GET("/addresses/:addr", s.addressesaddrHandlerGET)
 	mux.DELETE("/addresses/:addr", s.addressesaddrHandlerDELETE)
 	mux.GET("/balance", s.balanceHandler)
+	mux.POST("/batchquery/:endpoint", s.batchqueryHandler)
 	mux.GET("/blockrewards", s.blockrewardsHandler)
 	mux.POST("/broadcast", s.broadcastHandler)
 	mux.GET("/consensus", s.consensusHandler)

@@ -72,6 +72,24 @@ func (c *Client) Balance(limbo bool) (bal types.Currency, err error) {
 	return
 }
 
+// BatchAddresses returns information about a set of addresses, including their
+// unlock conditions and the index they were derived from. If an address is not
+// found, no error is returned; the address is simply omitted from the response.
+func (c *Client) BatchAddresses(addrs []types.UnlockHash) (infos map[types.UnlockHash]wallet.SeedAddressInfo, err error) {
+	var m responseBatchqueryAddresses
+	err = c.post("/batchquery/addresses", addrs, &m)
+	return m, err
+}
+
+// BatchTransactions returns information about a set of transactions. If a
+// transaction is not found, no error is returned; the transaction is simply
+// omitted from the response.
+func (c *Client) BatchTransactions(ids []types.TransactionID) (txns map[types.TransactionID]ResponseTransactionsID, err error) {
+	var m responseBatchqueryTransactions
+	err = c.post("/batchquery/transactions", ids, &m)
+	return m, err
+}
+
 // Broadcast broadcasts the supplied transaction set to all connected peers.
 func (c *Client) Broadcast(txnSet []types.Transaction) error {
 	return c.post("/broadcast", txnSet, nil)

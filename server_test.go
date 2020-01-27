@@ -25,15 +25,24 @@ func (stubTpool) TransactionSet(id crypto.Hash) (ts []types.Transaction) { retur
 
 type mockCS struct {
 	subscriber modules.ConsensusSetSubscriber
-	height     types.BlockHeight
+	utxos      map[types.SiacoinOutputID]types.SiacoinOutput
 }
 
 func (m *mockCS) ConsensusSetSubscribe(s modules.ConsensusSetSubscriber, ccid modules.ConsensusChangeID, cancel <-chan struct{}) error {
 	m.subscriber = s
+	m.utxos = make(map[types.SiacoinOutputID]types.SiacoinOutput)
 	return nil
 }
 
 func (m *mockCS) sendTxn(txn types.Transaction) {
+	inputs := make([]modules.SiacoinOutputDiff, len(txn.SiacoinInputs))
+	for i := range inputs {
+		inputs[i] = modules.SiacoinOutputDiff{
+			Direction:     modules.DiffRevert,
+			SiacoinOutput: m.utxos[txn.SiacoinInputs[i].ParentID],
+			ID:            txn.SiacoinInputs[i].ParentID,
+		}
+	}
 	outputs := make([]modules.SiacoinOutputDiff, len(txn.SiacoinOutputs))
 	for i := range outputs {
 		outputs[i] = modules.SiacoinOutputDiff{
@@ -41,16 +50,24 @@ func (m *mockCS) sendTxn(txn types.Transaction) {
 			SiacoinOutput: txn.SiacoinOutputs[i],
 			ID:            txn.SiacoinOutputID(uint64(i)),
 		}
+		m.utxos[outputs[i].ID] = txn.SiacoinOutputs[i]
+	}
+	fcs := make([]modules.FileContractDiff, len(txn.FileContracts))
+	for i := range fcs {
+		fcs[i] = modules.FileContractDiff{
+			Direction:    modules.DiffApply,
+			FileContract: txn.FileContracts[i],
+			ID:           txn.FileContractID(uint64(i)),
+		}
 	}
 	cc := modules.ConsensusChange{
 		AppliedBlocks: []types.Block{{
 			Transactions: []types.Transaction{txn},
 		}},
-		SiacoinOutputDiffs: outputs,
+		SiacoinOutputDiffs: append(inputs, outputs...),
 	}
 	frand.Read(cc.ID[:])
 	m.subscriber.ProcessConsensusChange(cc)
-	m.height++
 }
 
 // sendSiacoins creates an unsigned transaction that sends amount siacoins to
@@ -212,13 +229,14 @@ func TestServer(t *testing.T) {
 	}
 	amount := types.SiacoinPrecision.Div64(2)
 	dest := types.UnlockHash{}
-	fee := types.NewCurrency64(10)
-	txn, ok := sendSiacoins(amount, dest, fee, inputs, addr)
+	feePerByte := types.NewCurrency64(10)
+	txn, ok := sendSiacoins(amount, dest, feePerByte, inputs, addr)
 	if !ok {
 		t.Fatal("insufficient funds")
 	}
 
-	// sign and broadcast the transaction
+	// sign and broadcast the transaction, but do not call cs.sendTxn; we want
+	// the transaction to be in limbo
 	for _, sci := range txn.SiacoinInputs {
 		txnSig := wallet.StandardTransactionSignature(crypto.Hash(sci.ParentID))
 		wallet.AppendTransactionSignature(&txn, txnSig, seed.SecretKey(0))
@@ -247,20 +265,91 @@ func TestServer(t *testing.T) {
 		t.Fatal("limbo transaction should have two inputs", len(limbo[0].SiacoinOutputs))
 	}
 
-	// bring the transaction back from limbo
-	if err := client.RemoveFromLimbo(limbo[0].ID()); err != nil {
-		t.Fatal(err)
-	}
-	// we should have two UTXOs again
+	// send the transaction, bringing it out of limbo
+	cs.sendTxn(txn)
+	// we should have 1 UTXO now (the change output)
 	if limbo, err := client.LimboTransactions(); err != nil {
 		t.Fatal(err)
 	} else if len(limbo) != 0 {
 		t.Fatal("limbo should be empty")
 	} else if outputs, err := client.UnspentOutputs(true); err != nil {
 		t.Fatal(err)
-	} else if len(outputs) != 2 {
-		t.Fatal("should have two UTXOs")
+	} else if len(outputs) != 1 {
+		t.Fatal("should have one UTXO", outputs)
 	}
+
+	// send a file contract
+	cs.sendTxn(types.Transaction{
+		FileContracts: []types.FileContract{{
+			FileMerkleRoot:    crypto.Hash{1, 2, 3},
+			ValidProofOutputs: []types.SiacoinOutput{{UnlockHash: addr}},
+		}},
+	})
+
+	// query for the contract
+	fcs, err := client.FileContracts(-1)
+	if err != nil {
+		t.Fatal(err)
+	} else if len(fcs) != 1 {
+		t.Fatal("expected 1 id")
+	} else if fcs[0].FileMerkleRoot != (crypto.Hash{1, 2, 3}) {
+		t.Fatal("contract has wrong Merkle root")
+	} else if fch, err := client.FileContractHistory(fcs[0].ID); err != nil {
+		t.Fatal(err)
+	} else if len(fch) != 1 {
+		t.Fatal("expected 1 contract in history")
+	}
+
+	// batch query addrs
+	addrs, err := client.Addresses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	infos, err := client.BatchAddresses(addrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(infos) != 1 {
+		t.Error("expected 1 address info")
+	}
+	if addrInfo := infos[addr]; addrInfo.KeyIndex != 0 || addrInfo.UnlockConditions.UnlockHash() != addr {
+		t.Error("address info is inaccurate")
+	}
+
+	// batch query txns
+	txnHistory, err = client.Transactions(-1)
+	if err != nil {
+		t.Fatal(err)
+	} else if len(txnHistory) != 3 {
+		t.Fatal("expected 3 transactions")
+	}
+	txns, err := client.BatchTransactions(txnHistory)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if txn1 := txns[txnHistory[0]]; len(txn1.Transaction.FileContracts) != 1 {
+		t.Error("transaction should have a file contract")
+	} else if txn1.BlockHeight != 2 {
+		t.Error("transaction height should be 2")
+	} else if !txn1.FeePerByte.IsZero() {
+		t.Error("transaction fee should be zero")
+	}
+	if txn2 := txns[txnHistory[1]]; len(txn2.Transaction.SiacoinOutputs) != 2 {
+		t.Error("transaction should have two outputs")
+	} else if txn2.BlockHeight != 1 {
+		t.Error("transaction height should be 1")
+	} else if txn2.FeePerByte.IsZero() {
+		t.Error("transaction fee should be non-zero")
+	}
+	if txn3 := txns[txnHistory[2]]; len(txn3.Transaction.SiacoinOutputs) != 2 {
+		t.Error("transaction should have two outputs")
+	} else if txn3.BlockHeight != 1 {
+		t.Error("transaction height should be 1")
+	} else if !txn3.FeePerByte.IsZero() {
+		t.Error("transaction fee should be zero")
+	}
+
 }
 
 func TestServerThreadSafety(t *testing.T) {
