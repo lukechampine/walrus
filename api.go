@@ -1,3 +1,4 @@
+// Package walrus defines a walrus server and client.
 package walrus // import "lukechampine.com/walrus"
 
 import (
@@ -211,4 +212,56 @@ func (r ResponseTransactionsID) MarshalJSON() ([]byte, error) {
 		Outflow     types.Currency     `json:"outflow"`
 	}{*(*encodedTransaction)(unsafe.Pointer(&r.Transaction)),
 		r.BlockID, r.BlockHeight, r.Timestamp, r.FeePerByte, r.Inflow, r.Outflow})
+}
+
+type responseBatchqueryAddresses map[types.UnlockHash]wallet.SeedAddressInfo
+
+// MarshalJSON implements json.Marshaler.
+func (r responseBatchqueryAddresses) MarshalJSON() ([]byte, error) {
+	m := make(map[string]responseAddressesAddr, len(r))
+	for addr, info := range r {
+		m[addr.String()] = responseAddressesAddr(info)
+	}
+	return json.Marshal(m)
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (r *responseBatchqueryAddresses) UnmarshalJSON(b []byte) error {
+	if *r == nil {
+		*r = make(responseBatchqueryAddresses)
+	}
+	var m map[string]wallet.SeedAddressInfo
+	err := json.Unmarshal(b, &m)
+	for addr, info := range m {
+		var uh types.UnlockHash
+		uh.LoadString(addr)
+		(*r)[uh] = info
+	}
+	return err
+}
+
+type responseBatchqueryTransactions map[types.TransactionID]ResponseTransactionsID
+
+// MarshalJSON implements json.Marshaler.
+func (r responseBatchqueryTransactions) MarshalJSON() ([]byte, error) {
+	m := make(map[string]ResponseTransactionsID, len(r))
+	for id, txn := range r {
+		m[id.String()] = txn
+	}
+	return json.Marshal(m)
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (r *responseBatchqueryTransactions) UnmarshalJSON(b []byte) error {
+	if *r == nil {
+		*r = make(responseBatchqueryTransactions)
+	}
+	var m map[string]ResponseTransactionsID
+	err := json.Unmarshal(b, &m)
+	for idStr, txn := range m {
+		var id types.TransactionID
+		(*crypto.Hash)(&id).LoadString(idStr)
+		(*r)[id] = txn
+	}
+	return err
 }

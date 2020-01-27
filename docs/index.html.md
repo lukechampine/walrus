@@ -1045,6 +1045,133 @@ Returns the seed index that should be used to derive the next address.
 None
 
 
+
+# Batch Queries
+
+It is often desirable to retrieve multiple resources in one request. For
+example, when assembling inputs for a transaction, the `/addresses` endpoint
+must be queried once per input to lookup the unlock conditions for a given
+output. Batch queries allow the client to request *all* the unlock conditions
+with a single request.
+
+In general, batch queries have the form `POST /batchquery/:endpoint`, where the
+POST body is an array of addresses or identifiers, and the response is an object
+that maps addresses/identifiers to the value that would normally be returned by
+that endpoint. Batch queries never return an error; instead, values that cannot
+be found (e.g. the unlock conditions for an address that does not belong to the
+wallet) are simply omitted from the response.
+
+
+## Get Address Infos
+
+> Example Request:
+
+```shell
+curl "localhost:9380/batchquery/addresses" \
+  -X POST \
+  -d '[
+    "5ac6af95fe284b4bbb0110ef51d3c90f3e9ea37586352ec83bad569230bad7f37a452c0a2a2f"
+  ]'
+```
+
+> Example Response:
+
+```json
+{
+  "5ac6af95fe284b4bbb0110ef51d3c90f3e9ea37586352ec83bad569230bad7f37a452c0a2a2f": {
+    "unlockConditions": {
+      "publicKeys": [
+        "ed25519:0ea4e46899fe246e14122e3ca5865a7006d99086c52b1c63ab0e32226e56a7a1"
+      ],
+      "signaturesRequired": 1
+    },
+    "keyIndex": 1
+  }
+}
+
+```
+
+Returns information about a set of addresses, including their unlock conditions
+and the index they were derived from.
+
+### HTTP Request
+
+`POST http://localhost:9380/batchquery/addresses`
+
+### URL Parameters
+
+None.
+
+### Errors
+
+None.
+
+
+## Get Transactions
+
+> Example Request:
+
+```shell
+curl "localhost:9380/batchquery/transactions" \
+  -X POST \
+  -d '[
+    "2936d6eab2272dda76603aa8078be02d979cf52ac3d06c799536c725e32686ba"
+  ]'
+```
+
+> Example Response:
+
+```json
+{
+  "2936d6eab2272dda76603aa8078be02d979cf52ac3d06c799536c725e32686ba": {
+    "transaction": {
+      "siacoinInputs": [{
+        "parentID": "b87491287c34880a1b512f47ec932d777c6809672236e2533fd565969e69a09b",
+        "unlockConditions": {
+          "publicKeys": [ "ed25519:37e32b4a07d5a617c8b872daabcba320d604f3c5017c580956c1ac42c37f8059" ],
+          "signaturesRequired": 1
+        }
+      }],
+      "siacoinOutputs": [{
+        "value": "123000000000000000000000000000",
+        "unlockHash": "e506d7f1c03f40554a6b15da48684b96a3661be1b5c5380cd46d8a9efee8b6ffb12d771abe9f"
+      }],
+      "minerFees": [ "22500000000000000000000" ],
+      "transactionSignatures": [{
+        "parentID": "b87491287c34880a1b512f47ec932d777c6809672236e2533fd565969e69a09b",
+        "publicKeyIndex": 0,
+        "coveredFields": { "wholeTransaction": true },
+        "signature": "WbJO3jeLBgzbMZI7D4yx5dNrX5Qw2e3/8lTakL/F23e3DL0nG2O02zUmdlq9466lx9uhfT3ejJOsO1oB3lMZBQ=="
+      }]
+    },
+    "blockID": "00000000000000002ac0219169abcdfece33725d0a79e77735be27b0932d8be3",
+    "blockHeight": "123456",
+    "timestamp": "2019-08-01T13:17:04.641427-04:00",
+    "feePerByte": "48491379310344827586",
+    "inflow": "123000000000000000000000000000",
+    "outflow": "22500000000000000000000"
+  }
+}
+
+```
+
+Returns information about a set of transactions, along with various useful metadata.
+
+
+### HTTP Request
+
+`POST http://localhost:9380/batchquery/transactions`
+
+### URL Parameters
+
+None.
+
+### Errors
+
+None.
+
+
+
 # Limbo
 
 There is a period of uncertainty between the transaction being broadcast to
