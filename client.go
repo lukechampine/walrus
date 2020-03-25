@@ -11,7 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"gitlab.com/NebulousLabs/Sia/crypto"
+	"gitlab.com/NebulousLabs/Sia/modules"
 	"gitlab.com/NebulousLabs/Sia/types"
+	"lukechampine.com/us/renter/proto"
 	"lukechampine.com/us/wallet"
 )
 
@@ -258,6 +261,18 @@ func (c *Client) RemoveAddress(addr types.UnlockHash) error {
 	return c.delete("/addresses/" + addr.String())
 }
 
+// ProtoWallet returns a wrapped Client that implements the proto.Wallet
+// interface using an in-memory seed.
+func (c *Client) ProtoWallet(seed wallet.Seed) proto.Wallet {
+	return &protoBridge{Client: c, seed: seed}
+}
+
+// ProtoTransactionPool returns a wrapped Client that implements the
+// proto.TransactionPool interface.
+func (c *Client) ProtoTransactionPool() proto.TransactionPool {
+	return &protoBridge{Client: c}
+}
+
 // NewClient returns a client that communicates with a walrus server listening
 // on the specified address.
 func NewClient(addr string) *Client {
@@ -266,4 +281,125 @@ func NewClient(addr string) *Client {
 		addr = "https://" + addr
 	}
 	return &Client{addr}
+}
+
+type protoBridge struct {
+	*Client
+	seed wallet.Seed
+}
+
+func (c *protoBridge) AcceptTransactionSet(txnSet []types.Transaction) error {
+	return c.Client.Broadcast(txnSet)
+}
+
+func (c *protoBridge) FeeEstimate() (minFee, maxFee types.Currency, err error) {
+	fee, err := c.Client.RecommendedFee()
+	return fee, fee.Mul64(3), err
+}
+
+func (c *protoBridge) NewWalletAddress() (types.UnlockHash, error) {
+	index, err := c.Client.SeedIndex()
+	if err != nil {
+		return types.UnlockHash{}, err
+	}
+	info := wallet.SeedAddressInfo{
+		UnlockConditions: wallet.StandardUnlockConditions(c.seed.PublicKey(index)),
+		KeyIndex:         index,
+	}
+	if err := c.Client.AddAddress(info); err != nil {
+		return types.UnlockHash{}, err
+	}
+	return info.UnlockHash(), nil
+}
+
+func (c *protoBridge) SignTransaction(txn *types.Transaction, toSign []crypto.Hash) error {
+	if len(toSign) == 0 {
+		// lazy mode: add standard sigs for every input we own
+		for _, input := range txn.SiacoinInputs {
+			info, err := c.Client.AddressInfo(input.UnlockConditions.UnlockHash())
+			if err != nil {
+				// TODO: catch errors other than "address not found"
+				continue
+			}
+			sk := c.seed.SecretKey(info.KeyIndex)
+			txnSig := wallet.StandardTransactionSignature(crypto.Hash(input.ParentID))
+			wallet.AppendTransactionSignature(txn, txnSig, sk)
+		}
+		return nil
+	}
+
+	sigAddr := func(id crypto.Hash) (types.UnlockHash, bool) {
+		for _, sci := range txn.SiacoinInputs {
+			if crypto.Hash(sci.ParentID) == id {
+				return sci.UnlockConditions.UnlockHash(), true
+			}
+		}
+		for _, sfi := range txn.SiafundInputs {
+			if crypto.Hash(sfi.ParentID) == id {
+				return sfi.UnlockConditions.UnlockHash(), true
+			}
+		}
+		for _, fcr := range txn.FileContractRevisions {
+			if crypto.Hash(fcr.ParentID) == id {
+				return fcr.UnlockConditions.UnlockHash(), true
+			}
+		}
+		return types.UnlockHash{}, false
+	}
+	sign := func(i int) error {
+		addr, ok := sigAddr(txn.TransactionSignatures[i].ParentID)
+		if !ok {
+			return errors.New("invalid id")
+		}
+		info, err := c.Client.AddressInfo(addr)
+		if err != nil {
+			return err
+		}
+		sk := c.seed.SecretKey(info.KeyIndex)
+		txn.TransactionSignatures[i].Signature = sk.SignHash(txn.SigHash(i, types.ASICHardforkHeight+1))
+		return nil
+	}
+
+outer:
+	for _, parent := range toSign {
+		for sigIndex, sig := range txn.TransactionSignatures {
+			if sig.ParentID == parent {
+				if err := sign(sigIndex); err != nil {
+					return err
+				}
+				continue outer
+			}
+		}
+		return errors.New("sighash not found in transaction")
+	}
+
+	return nil
+}
+
+func (c *protoBridge) UnspentOutputs(limbo bool) ([]modules.UnspentOutput, error) {
+	utxos, err := c.Client.UnspentOutputs(limbo)
+	outputs := make([]modules.UnspentOutput, len(utxos))
+	for i := range outputs {
+		outputs[i] = modules.UnspentOutput{
+			FundType:   types.SpecifierSiacoinOutput,
+			ID:         types.OutputID(utxos[i].ID),
+			UnlockHash: utxos[i].UnlockHash,
+			Value:      utxos[i].Value,
+		}
+	}
+	return outputs, err
+}
+
+func (c *protoBridge) UnconfirmedParents(txn types.Transaction) ([]types.Transaction, error) {
+	limboParents, err := c.Client.UnconfirmedParents(txn)
+	parents := make([]types.Transaction, len(limboParents))
+	for i := range parents {
+		parents[i] = limboParents[i].Transaction
+	}
+	return parents, err
+}
+
+func (c *protoBridge) UnlockConditions(addr types.UnlockHash) (types.UnlockConditions, error) {
+	info, err := c.Client.AddressInfo(addr)
+	return info.UnlockConditions, err
 }
