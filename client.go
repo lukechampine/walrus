@@ -14,6 +14,7 @@ import (
 	"gitlab.com/NebulousLabs/Sia/crypto"
 	"gitlab.com/NebulousLabs/Sia/modules"
 	"gitlab.com/NebulousLabs/Sia/types"
+	"lukechampine.com/us/ed25519hash"
 	"lukechampine.com/us/renter/proto"
 	"lukechampine.com/us/wallet"
 )
@@ -356,7 +357,7 @@ func (c *protoBridge) SignTransaction(txn *types.Transaction, toSign []crypto.Ha
 			return err
 		}
 		sk := c.seed.SecretKey(info.KeyIndex)
-		txn.TransactionSignatures[i].Signature = sk.SignHash(txn.SigHash(i, types.ASICHardforkHeight+1))
+		txn.TransactionSignatures[i].Signature = ed25519hash.Sign(sk, txn.SigHash(i, types.ASICHardforkHeight+1))
 		return nil
 	}
 
