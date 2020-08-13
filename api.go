@@ -142,10 +142,12 @@ type responseLimbo []wallet.LimboTransaction
 func (r responseLimbo) MarshalJSON() ([]byte, error) {
 	enc := make([]struct {
 		encodedTransaction
-		LimboSince time.Time `json:"limboSince"`
+		TransactionID string    `json:"transactionID"`
+		LimboSince    time.Time `json:"limboSince"`
 	}, len(r))
 	for i := range enc {
 		enc[i].encodedTransaction = *(*encodedTransaction)(unsafe.Pointer(&r[i].Transaction))
+		enc[i].TransactionID = r[i].ID().String()
 		enc[i].LimboSince = r[i].LimboSince
 	}
 	return json.Marshal(enc)
