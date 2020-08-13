@@ -603,6 +603,7 @@ curl "localhost:9380/limbo"
       "coveredFields": { "wholeTransaction": true },
       "signature": "WbJO3jeLBgzbMZI7D4yx5dNrX5Qw2e3/8lTakL/F23e3DL0nG2O02zUmdlq9466lx9uhfT3ejJOsO1oB3lMZBQ=="
     }],
+    "id": "fe7791287c3d880a1b512f47ec931d777c6809672c36e2533fd565969e69d002",
     "limboSince": "1993-04-12T23:25:11-05:00"
   },
 ]
