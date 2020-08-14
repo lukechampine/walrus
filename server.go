@@ -171,9 +171,17 @@ func (s *server) broadcastHandler(w http.ResponseWriter, req *http.Request, _ ht
 		return
 	}
 
-	// add the transactions to Limbo
+	// add transactions to Limbo
+	//
+	// NOTE: we only add transactions that are relevant to the wallet.
+	// Otherwise, we would not be able to automatically recognize and remove
+	// these transactions from Limbo when they later appeared in a block. (It's
+	// still possible to manually add such transactions to Limbo, but they'll
+	// need to be manually removed as well.)
 	for _, txn := range txnSet {
-		s.w.AddToLimbo(txn)
+		if wallet.RelevantTransaction(s.w, txn) {
+			s.w.AddToLimbo(txn)
+		}
 	}
 }
 
