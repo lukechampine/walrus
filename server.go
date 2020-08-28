@@ -36,6 +36,20 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	enc.Encode(v)
 }
 
+func calculateFlows(txn wallet.Transaction, owner wallet.AddressOwner) (credit, debit types.Currency) {
+	for i, sci := range txn.SiacoinInputs {
+		if owner.OwnsAddress(wallet.CalculateUnlockHash(sci.UnlockConditions)) {
+			debit = debit.Add(txn.InputValues[i])
+		}
+	}
+	for _, sco := range txn.SiacoinOutputs {
+		if owner.OwnsAddress(sco.UnlockHash) {
+			credit = credit.Add(sco.Value)
+		}
+	}
+	return
+}
+
 type server struct {
 	w  *wallet.SeedWallet
 	tp TransactionPool
@@ -107,23 +121,15 @@ func (s *server) batchqueryHandler(w http.ResponseWriter, req *http.Request, ps 
 		txns := make(responseBatchqueryTransactions, len(ids))
 		for _, id := range ids {
 			if txn, ok := s.w.Transaction(id); ok {
-				// calculate inflow/outflow
-				var inflow, outflow types.Currency
-				for _, sco := range txn.SiacoinOutputs {
-					if s.w.OwnsAddress(sco.UnlockHash) {
-						inflow = inflow.Add(sco.Value)
-					} else {
-						outflow = outflow.Add(sco.Value)
-					}
-				}
+				credit, debit := calculateFlows(txn, s.w)
 				txns[id] = ResponseTransactionsID{
 					Transaction: txn.Transaction,
 					BlockID:     txn.BlockID,
 					BlockHeight: txn.BlockHeight,
 					Timestamp:   txn.Timestamp,
 					FeePerByte:  txn.FeePerByte,
-					Inflow:      inflow,
-					Outflow:     outflow,
+					Credit:      credit,
+					Debit:       debit,
 				}
 			}
 		}
@@ -304,23 +310,15 @@ func (s *server) transactionsidHandler(w http.ResponseWriter, req *http.Request,
 		http.Error(w, "Transaction not found", http.StatusNotFound)
 		return
 	}
-	// calculate inflow/outflow
-	var inflow, outflow types.Currency
-	for _, sco := range txn.SiacoinOutputs {
-		if s.w.OwnsAddress(sco.UnlockHash) {
-			inflow = inflow.Add(sco.Value)
-		} else {
-			outflow = outflow.Add(sco.Value)
-		}
-	}
+	credit, debit := calculateFlows(txn, s.w)
 	writeJSON(w, ResponseTransactionsID{
 		Transaction: txn.Transaction,
 		BlockID:     txn.BlockID,
 		BlockHeight: txn.BlockHeight,
 		Timestamp:   txn.Timestamp,
 		FeePerByte:  txn.FeePerByte,
-		Inflow:      inflow,
-		Outflow:     outflow,
+		Credit:      credit,
+		Debit:       debit,
 	})
 }
 

@@ -220,8 +220,8 @@ func (c *Client) TransactionsByAddress(addr types.UnlockHash, max int) (txids []
 	return
 }
 
-// Transaction returns the transaction with the specified ID, as well as inflow,
-// outflow, and fee information. The transaction must be relevant to the wallet.
+// Transaction returns the transaction with the specified ID, as well as credit,
+// debit, and fee information. The transaction must be relevant to the wallet.
 func (c *Client) Transaction(txid types.TransactionID) (txn ResponseTransactionsID, err error) {
 	err = c.get("/transactions/"+txid.String(), &txn)
 	return

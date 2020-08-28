@@ -198,8 +198,8 @@ type ResponseTransactionsID struct {
 	BlockHeight types.BlockHeight `json:"blockHeight"`
 	Timestamp   time.Time         `json:"timestamp"`
 	FeePerByte  types.Currency    `json:"feePerByte"`
-	Inflow      types.Currency    `json:"inflow"`
-	Outflow     types.Currency    `json:"outflow"`
+	Credit      types.Currency    `json:"credit"`
+	Debit       types.Currency    `json:"debit"`
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -210,10 +210,10 @@ func (r ResponseTransactionsID) MarshalJSON() ([]byte, error) {
 		BlockHeight types.BlockHeight  `json:"blockHeight"`
 		Timestamp   time.Time          `json:"timestamp"`
 		FeePerByte  types.Currency     `json:"feePerByte"`
-		Inflow      types.Currency     `json:"inflow"`
-		Outflow     types.Currency     `json:"outflow"`
+		Credit      types.Currency     `json:"credit"`
+		Debit       types.Currency     `json:"debit"`
 	}{*(*encodedTransaction)(unsafe.Pointer(&r.Transaction)),
-		r.BlockID, r.BlockHeight, r.Timestamp, r.FeePerByte, r.Inflow, r.Outflow})
+		r.BlockID, r.BlockHeight, r.Timestamp, r.FeePerByte, r.Credit, r.Debit})
 }
 
 type responseBatchqueryAddresses map[types.UnlockHash]wallet.SeedAddressInfo
