@@ -8,12 +8,14 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
 	"gitlab.com/NebulousLabs/Sia/crypto"
-	"gitlab.com/NebulousLabs/Sia/modules"
 	"gitlab.com/NebulousLabs/Sia/types"
+	"lukechampine.com/frand"
 	"lukechampine.com/us/ed25519hash"
 	"lukechampine.com/us/renter/proto"
 	"lukechampine.com/us/wallet"
@@ -289,16 +291,9 @@ type protoBridge struct {
 	seed wallet.Seed
 }
 
-func (c *protoBridge) AcceptTransactionSet(txnSet []types.Transaction) error {
-	return c.Client.Broadcast(txnSet)
-}
+// proto.Wallet methods
 
-func (c *protoBridge) FeeEstimate() (minFee, maxFee types.Currency, err error) {
-	fee, err := c.Client.RecommendedFee()
-	return fee, fee.Mul64(3), err
-}
-
-func (c *protoBridge) NewWalletAddress() (types.UnlockHash, error) {
+func (c *protoBridge) Address() (types.UnlockHash, error) {
 	index, err := c.Client.SeedIndex()
 	if err != nil {
 		return types.UnlockHash{}, err
@@ -311,6 +306,100 @@ func (c *protoBridge) NewWalletAddress() (types.UnlockHash, error) {
 		return types.UnlockHash{}, err
 	}
 	return info.UnlockHash(), nil
+}
+
+func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Currency) ([]crypto.Hash, error) {
+	if amount.IsZero() {
+		return nil, nil
+	}
+	// UnspentOutputs(true) returns the outputs that exist after Limbo
+	// transactions are applied. This is not ideal, because the host is more
+	// likely to reject transactions that have unconfirmed parents. On the other
+	// hand, UnspentOutputs(false) won't return any outputs that were created
+	// in Limbo transactions, but it *will* return outputs that have been
+	// *spent* in Limbo transactions. So what we really want is the intersection
+	// of these sets, keeping only the confirmed outputs that were not spent in
+	// Limbo transactions.
+	limboOutputs, err := c.Client.UnspentOutputs(true)
+	if err != nil {
+		return nil, err
+	}
+	confirmedOutputs, err := c.Client.UnspentOutputs(false)
+	if err != nil {
+		return nil, err
+	}
+	var outputs []wallet.UnspentOutput
+	for _, lo := range limboOutputs {
+		for _, co := range confirmedOutputs {
+			if co.ID == lo.ID {
+				outputs = append(outputs, lo)
+				break
+			}
+		}
+	}
+	var balance types.Currency
+	for _, o := range outputs {
+		balance = balance.Add(o.Value)
+	}
+	var limboBalance types.Currency
+	for _, o := range limboOutputs {
+		limboBalance = limboBalance.Add(o.Value)
+	}
+
+	if balance.Cmp(amount) < 0 {
+		if limboBalance.Cmp(amount) < 0 {
+			return nil, wallet.ErrInsufficientFunds
+		}
+		// confirmed outputs are not sufficient, but limbo outputs are
+		outputs = limboOutputs
+	}
+	// choose outputs randomly
+	frand.Shuffle(len(outputs), reflect.Swapper(outputs))
+
+	// keep adding outputs until we have enough
+	var fundingOutputs []wallet.UnspentOutput
+	var outputSum types.Currency
+	for i, o := range outputs {
+		if outputSum = outputSum.Add(o.Value); outputSum.Cmp(amount) >= 0 {
+			fundingOutputs = outputs[:i+1]
+			break
+		}
+	}
+	// due to the random selection, we may have more outputs than we need; sort
+	// by value and discard as many as possible
+	sort.Slice(fundingOutputs, func(i, j int) bool {
+		return fundingOutputs[i].Value.Cmp(fundingOutputs[j].Value) < 0
+	})
+	for outputSum.Sub(fundingOutputs[0].Value).Cmp(amount) >= 0 {
+		outputSum = outputSum.Sub(fundingOutputs[0].Value)
+		fundingOutputs = fundingOutputs[1:]
+	}
+
+	var toSign []crypto.Hash
+	for _, o := range fundingOutputs {
+		info, err := c.Client.AddressInfo(o.UnlockHash)
+		if err != nil {
+			return nil, err
+		}
+		txn.SiacoinInputs = append(txn.SiacoinInputs, types.SiacoinInput{
+			ParentID:         o.ID,
+			UnlockConditions: info.UnlockConditions,
+		})
+		txn.TransactionSignatures = append(txn.TransactionSignatures, wallet.StandardTransactionSignature(crypto.Hash(o.ID)))
+		toSign = append(toSign, crypto.Hash(o.ID))
+	}
+	// add change output if needed
+	if change := outputSum.Sub(amount); !change.IsZero() {
+		changeAddr, err := c.Address()
+		if err != nil {
+			return nil, err
+		}
+		txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
+			UnlockHash: changeAddr,
+			Value:      change,
+		})
+	}
+	return toSign, nil
 }
 
 func (c *protoBridge) SignTransaction(txn *types.Transaction, toSign []crypto.Hash) error {
@@ -377,18 +466,10 @@ outer:
 	return nil
 }
 
-func (c *protoBridge) UnspentOutputs(limbo bool) ([]modules.UnspentOutput, error) {
-	utxos, err := c.Client.UnspentOutputs(limbo)
-	outputs := make([]modules.UnspentOutput, len(utxos))
-	for i := range outputs {
-		outputs[i] = modules.UnspentOutput{
-			FundType:   types.SpecifierSiacoinOutput,
-			ID:         types.OutputID(utxos[i].ID),
-			UnlockHash: utxos[i].UnlockHash,
-			Value:      utxos[i].Value,
-		}
-	}
-	return outputs, err
+// proto.TransactionPool methods
+
+func (c *protoBridge) AcceptTransactionSet(txnSet []types.Transaction) error {
+	return c.Client.Broadcast(txnSet)
 }
 
 func (c *protoBridge) UnconfirmedParents(txn types.Transaction) ([]types.Transaction, error) {
@@ -400,7 +481,7 @@ func (c *protoBridge) UnconfirmedParents(txn types.Transaction) ([]types.Transac
 	return parents, err
 }
 
-func (c *protoBridge) UnlockConditions(addr types.UnlockHash) (types.UnlockConditions, error) {
-	info, err := c.Client.AddressInfo(addr)
-	return info.UnlockConditions, err
+func (c *protoBridge) FeeEstimate() (minFee, maxFee types.Currency, err error) {
+	fee, err := c.Client.RecommendedFee()
+	return fee, fee.Mul64(3), err
 }
