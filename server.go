@@ -161,12 +161,14 @@ func (s *server) broadcastHandler(w http.ResponseWriter, req *http.Request, _ ht
 		http.Error(w, "Transaction set is empty", http.StatusBadRequest)
 		return
 	}
-	// check for duplicate transactions
+	// if transaction set in already on-chain, no-op
+	allConfirmed := true
 	for _, txn := range txnSet {
-		if _, ok := s.w.Transaction(txn.ID()); ok {
-			http.Error(w, "Transaction "+txn.ID().String()+" is already in the blockchain", http.StatusBadRequest)
-			return
-		}
+		_, ok := s.w.Transaction(txn.ID())
+		allConfirmed = allConfirmed && ok
+	}
+	if allConfirmed {
+		return
 	}
 
 	// submit the transaction set (ignoring duplicate error -- if the set is

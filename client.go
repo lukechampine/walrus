@@ -309,17 +309,11 @@ func (c *protoBridge) Address() (types.UnlockHash, error) {
 }
 
 func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Currency) ([]crypto.Hash, error) {
+	// see (wallet.HotWallet).FundTransaction
+
 	if amount.IsZero() {
 		return nil, nil
 	}
-	// UnspentOutputs(true) returns the outputs that exist after Limbo
-	// transactions are applied. This is not ideal, because the host is more
-	// likely to reject transactions that have unconfirmed parents. On the other
-	// hand, UnspentOutputs(false) won't return any outputs that were created
-	// in Limbo transactions, but it *will* return outputs that have been
-	// *spent* in Limbo transactions. So what we really want is the intersection
-	// of these sets, keeping only the confirmed outputs that were not spent in
-	// Limbo transactions.
 	limboOutputs, err := c.Client.UnspentOutputs(true)
 	if err != nil {
 		return nil, err
@@ -345,18 +339,13 @@ func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Curre
 	for _, o := range limboOutputs {
 		limboBalance = limboBalance.Add(o.Value)
 	}
-
 	if balance.Cmp(amount) < 0 {
 		if limboBalance.Cmp(amount) < 0 {
 			return nil, wallet.ErrInsufficientFunds
 		}
-		// confirmed outputs are not sufficient, but limbo outputs are
 		outputs = limboOutputs
 	}
-	// choose outputs randomly
 	frand.Shuffle(len(outputs), reflect.Swapper(outputs))
-
-	// keep adding outputs until we have enough
 	var fundingOutputs []wallet.UnspentOutput
 	var outputSum types.Currency
 	for i, o := range outputs {
@@ -365,8 +354,6 @@ func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Curre
 			break
 		}
 	}
-	// due to the random selection, we may have more outputs than we need; sort
-	// by value and discard as many as possible
 	sort.Slice(fundingOutputs, func(i, j int) bool {
 		return fundingOutputs[i].Value.Cmp(fundingOutputs[j].Value) < 0
 	})
@@ -374,7 +361,6 @@ func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Curre
 		outputSum = outputSum.Sub(fundingOutputs[0].Value)
 		fundingOutputs = fundingOutputs[1:]
 	}
-
 	var toSign []crypto.Hash
 	for _, o := range fundingOutputs {
 		info, err := c.Client.AddressInfo(o.UnlockHash)
@@ -388,7 +374,6 @@ func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Curre
 		txn.TransactionSignatures = append(txn.TransactionSignatures, wallet.StandardTransactionSignature(crypto.Hash(o.ID)))
 		toSign = append(toSign, crypto.Hash(o.ID))
 	}
-	// add change output if needed
 	if change := outputSum.Sub(amount); !change.IsZero() {
 		changeAddr, err := c.Address()
 		if err != nil {
