@@ -350,6 +350,24 @@ func TestServer(t *testing.T) {
 		t.Error("transaction fee should be zero")
 	}
 
+	// test the interface adaptor
+	pclient := client.ProtoWallet(seed)
+	txn = types.Transaction{
+		SiacoinOutputs: []types.SiacoinOutput{
+			{UnlockHash: types.UnlockHash{}, Value: types.SiacoinPrecision.Div64(10)},
+		},
+	}
+	toSign, discard, err := pclient.FundTransaction(&txn, types.SiacoinPrecision.Div64(10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pclient.SignTransaction(&txn, toSign); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Broadcast([]types.Transaction{txn}); err != nil {
+		t.Fatal(err)
+	}
+	discard()
 }
 
 func TestServerThreadSafety(t *testing.T) {

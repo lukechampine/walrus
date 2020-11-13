@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"gitlab.com/NebulousLabs/Sia/crypto"
 	"gitlab.com/NebulousLabs/Sia/types"
@@ -267,7 +268,11 @@ func (c *Client) RemoveAddress(addr types.UnlockHash) error {
 // ProtoWallet returns a wrapped Client that implements the proto.Wallet
 // interface using an in-memory seed.
 func (c *Client) ProtoWallet(seed wallet.Seed) proto.Wallet {
-	return &protoBridge{Client: c, seed: seed}
+	return &protoBridge{
+		Client: c,
+		seed:   seed,
+		used:   make(map[types.SiacoinOutputID]struct{}),
+	}
 }
 
 // ProtoTransactionPool returns a wrapped Client that implements the
@@ -289,11 +294,15 @@ func NewClient(addr string) *Client {
 type protoBridge struct {
 	*Client
 	seed wallet.Seed
+	used map[types.SiacoinOutputID]struct{}
+	mu   sync.Mutex
 }
 
 // proto.Wallet methods
 
 func (c *protoBridge) Address() (types.UnlockHash, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	index, err := c.Client.SeedIndex()
 	if err != nil {
 		return types.UnlockHash{}, err
@@ -308,20 +317,37 @@ func (c *protoBridge) Address() (types.UnlockHash, error) {
 	return info.UnlockHash(), nil
 }
 
-func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Currency) ([]crypto.Hash, error) {
+func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Currency) ([]crypto.Hash, func(), error) {
 	// see (wallet.HotWallet).FundTransaction
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if amount.IsZero() {
-		return nil, nil
+		return nil, nil, nil
 	}
 	limboOutputs, err := c.Client.UnspentOutputs(true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	unused := limboOutputs[:0]
+	for _, lo := range limboOutputs {
+		if _, ok := c.used[lo.ID]; !ok {
+			unused = append(unused, lo)
+		}
+	}
+	limboOutputs = unused
 	confirmedOutputs, err := c.Client.UnspentOutputs(false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	unused = confirmedOutputs[:0]
+	for _, co := range confirmedOutputs {
+		if _, ok := c.used[co.ID]; !ok {
+			unused = append(unused, co)
+		}
+	}
+	confirmedOutputs = unused
+
 	var outputs []wallet.UnspentOutput
 	for _, lo := range limboOutputs {
 		for _, co := range confirmedOutputs {
@@ -341,7 +367,7 @@ func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Curre
 	}
 	if balance.Cmp(amount) < 0 {
 		if limboBalance.Cmp(amount) < 0 {
-			return nil, wallet.ErrInsufficientFunds
+			return nil, nil, wallet.ErrInsufficientFunds
 		}
 		outputs = limboOutputs
 	}
@@ -365,7 +391,7 @@ func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Curre
 	for _, o := range fundingOutputs {
 		info, err := c.Client.AddressInfo(o.UnlockHash)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		txn.SiacoinInputs = append(txn.SiacoinInputs, types.SiacoinInput{
 			ParentID:         o.ID,
@@ -375,16 +401,25 @@ func (c *protoBridge) FundTransaction(txn *types.Transaction, amount types.Curre
 		toSign = append(toSign, crypto.Hash(o.ID))
 	}
 	if change := outputSum.Sub(amount); !change.IsZero() {
+		c.mu.Unlock()
 		changeAddr, err := c.Address()
+		c.mu.Lock()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
 			UnlockHash: changeAddr,
 			Value:      change,
 		})
 	}
-	return toSign, nil
+	discard := func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		for _, o := range fundingOutputs {
+			delete(c.used, o.ID)
+		}
+	}
+	return toSign, discard, nil
 }
 
 func (c *protoBridge) SignTransaction(txn *types.Transaction, toSign []crypto.Hash) error {
