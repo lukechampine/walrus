@@ -64,7 +64,9 @@ func (m *mockCS) sendTxn(txn types.Transaction) {
 		AppliedBlocks: []types.Block{{
 			Transactions: []types.Transaction{txn},
 		}},
-		SiacoinOutputDiffs: append(inputs, outputs...),
+		ConsensusChangeDiffs: modules.ConsensusChangeDiffs{
+			SiacoinOutputDiffs: append(inputs, outputs...),
+		},
 	}
 	frand.Read(cc.ID[:])
 	m.subscriber.ProcessConsensusChange(cc)
@@ -241,7 +243,7 @@ func TestServer(t *testing.T) {
 		txnSig := wallet.StandardTransactionSignature(crypto.Hash(sci.ParentID))
 		wallet.AppendTransactionSignature(&txn, txnSig, seed.SecretKey(0))
 	}
-	if err := txn.StandaloneValid(types.ASICHardforkHeight + 1); err != nil {
+	if err := txn.StandaloneValid(types.FoundationHardforkHeight + 1); err != nil {
 		t.Fatal(err)
 	} else if err := client.Broadcast([]types.Transaction{txn}); err != nil {
 		t.Fatal(err)
