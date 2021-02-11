@@ -466,7 +466,7 @@ func (c *protoBridge) SignTransaction(txn *types.Transaction, toSign []crypto.Ha
 			return err
 		}
 		sk := c.seed.SecretKey(info.KeyIndex)
-		txn.TransactionSignatures[i].Signature = ed25519hash.Sign(sk, txn.SigHash(i, types.ASICHardforkHeight+1))
+		txn.TransactionSignatures[i].Signature = ed25519hash.Sign(sk, txn.SigHash(i, types.FoundationHardforkHeight+1))
 		return nil
 	}
 
