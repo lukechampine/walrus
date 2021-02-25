@@ -143,15 +143,20 @@ type ResponseConsensus struct {
 type responseLimbo []wallet.LimboTransaction
 
 func (r responseLimbo) MarshalJSON() ([]byte, error) {
-	enc := make([]struct {
-		JSONTransaction
-		ID         string    `json:"id"`
-		LimboSince time.Time `json:"limboSince"`
-	}, len(r))
+	// NOTE: normally we would simply embed the JSONTransaction field, but doing
+	// so would cause the entire struct to inherit JSONTransaction's MarshalJSON
+	// method, meaning that the ID and LimboSince fields would be ignored. There
+	// is no idiomatic workaround for this; we hack around it by encoding the
+	// fields separately and manually stitching them together.
+	enc := make([]json.RawMessage, len(r))
 	for i := range enc {
-		enc[i].JSONTransaction = JSONTransaction(r[i].Transaction)
-		enc[i].ID = r[i].ID().String()
-		enc[i].LimboSince = r[i].LimboSince
+		js1, _ := json.Marshal(JSONTransaction(r[i].Transaction))
+		js2, _ := json.Marshal(struct {
+			ID         string    `json:"id"`
+			LimboSince time.Time `json:"limboSince"`
+		}{r[i].ID().String(), r[i].LimboSince})
+		js2[0] = ','
+		enc[i] = append(js1[:len(js1)-1], js2...)
 	}
 	return json.Marshal(enc)
 }

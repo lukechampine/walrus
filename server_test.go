@@ -265,6 +265,8 @@ func TestServer(t *testing.T) {
 		t.Fatal("should have one transaction in limbo")
 	} else if len(limbo[0].SiacoinInputs) != 2 {
 		t.Fatal("limbo transaction should have two inputs", len(limbo[0].SiacoinOutputs))
+	} else if limbo[0].LimboSince.IsZero() {
+		t.Fatal("limbo transaction has zero LimboSince")
 	}
 
 	// send the transaction, bringing it out of limbo
