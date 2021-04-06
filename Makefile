@@ -5,6 +5,10 @@ ldflags = -X 'main.githash=`git rev-parse --short HEAD`' \
 all:
 	go install -ldflags "$(ldflags)" ./cmd/...
 
+# static is like all, but for static binaries
+static:
+	go install -ldflags "$(ldflags) -s -w -extldflags='-static'" -tags='timetzdata' ./cmd/...
+
 # dev builds a binary with dev constants
 dev:
 	go install -ldflags "$(ldflags)" -tags='dev' ./cmd/...
@@ -35,4 +39,4 @@ lint:
 		--skip-dirs=internal \
 		./...
 
-.PHONY: all dev test test-long bench lint
+.PHONY: all static dev test test-long bench lint
