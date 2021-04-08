@@ -1,0 +1,44 @@
+name: walrus
+on:
+  pull_request:
+
+jobs:
+  lint:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+    - 
+      name: Checkout
+      uses: actions/checkout@v2
+    - 
+      name: Lint
+      uses: golangci/golangci-lint-action@v2
+      with:
+        version: v1.39
+        skip-pkg-cache: true # set false if caching
+        skip-build-cache: true # set false if caching 
+
+  test:
+    timeout-minutes: 5
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go:
+        - '1.13' # oldest supported version
+        - '1.16' # latest version
+    steps:
+    - 
+      name: Setup
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go }}
+    - 
+      name: Checkout
+      uses: actions/checkout@v2
+    - 
+      name: Test
+      run: make test
+    - 
+      name: Build
+      run: make

@@ -24,19 +24,6 @@ bench:
 
 lint:
 	@golint ./...
-	@golangci-lint run \
-		--enable-all \
-		--disable=lll \
-		--disable=gocyclo \
-		--disable=prealloc \
-		--disable=interfacer \
-		--disable=unparam \
-		--disable=gocritic \
-		--disable=dupl \
-		--disable=errcheck \
-		--disable=gochecknoglobals \
-		--disable=funlen \
-		--skip-dirs=internal \
-		./...
+	@golangci-lint run
 
 .PHONY: all static dev test test-long bench lint

@@ -1,0 +1,89 @@
+name: walrus
+on:
+  push:
+    # implicit OR for all below
+    branches: [master]
+    tags:
+      - v*.*.*
+    # If the Docker build below wasn't a "FROM scratch" container, we would
+    # want to re-build daily to ensure dependencies in the container are
+    # upgraded periodically, even if the app code does not change.
+    # ...But this is a "FROM scratch" container, so we only really have
+    # to worry about Go (the toolchain) vulnerabilities. Meh?
+    #schedule:
+    #  - cron: '0 0 * * *' 
+
+jobs:
+  lint:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+    - 
+      name: Checkout
+      uses: actions/checkout@v2
+    - 
+      name: Lint
+      uses: golangci/golangci-lint-action@v2
+      with:
+        version: v1.39
+        skip-pkg-cache: true # set false if caching
+        skip-build-cache: true # set false if caching 
+
+  test:
+    timeout-minutes: 5
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go:
+        - '1.13' # oldest supported version
+        - '1.16' # latest version
+    steps:
+    - 
+      name: Setup
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go }}
+    - 
+      name: Checkout
+      uses: actions/checkout@v2
+    - 
+      name: Test
+      run: make test
+    - 
+      name: Build
+      run: make
+
+  build:
+    timeout-minutes: 5
+    name: Docker build 
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - 
+      name: QEMU
+      uses: docker/setup-qemu-action@v1
+    - 
+      name: Buildx
+      uses: docker/setup-buildx-action@v1
+    - 
+      name: Login
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io # this is the GitHub container registry, which is *free (for now).
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - 
+      name: Checkout
+      uses: actions/checkout@v2
+    - 
+      name: Build and push
+      uses: docker/build-push-action@v2
+      with:
+        file: ./Dockerfile
+        tags: |
+          ghcr.io/${{ github.repository_owner }}/walrus:latest
+        pull: true # always attempt to pull newest version of image
+        push: true
+        #platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
+        platforms: linux/amd64

@@ -2,6 +2,7 @@ package walrus
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -174,7 +175,7 @@ func (s *server) broadcastHandler(w http.ResponseWriter, req *http.Request, _ ht
 	// submit the transaction set (ignoring duplicate error -- if the set is
 	// already in the tpool, great)
 	err := s.tp.AcceptTransactionSet(txnSet)
-	if err != nil && err != modules.ErrDuplicateTransactionSet {
+	if err != nil && !errors.Is(err, modules.ErrDuplicateTransactionSet) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
