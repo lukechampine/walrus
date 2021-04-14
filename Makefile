@@ -24,6 +24,5 @@ bench:
 
 lint:
 	@golint ./...
-	@golangci-lint run
 
 .PHONY: all static dev test test-long bench lint

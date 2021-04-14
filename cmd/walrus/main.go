@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	// to be supplied at build time.
+	// to be supplied at build time
 	githash   = "?"
 	builddate = "?"
 )

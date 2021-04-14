@@ -2,7 +2,6 @@ package walrus
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,7 +33,7 @@ func (c *Client) req(method string, route string, data, resp interface{}) error 
 		js, _ := json.Marshal(data)
 		body = bytes.NewReader(js)
 	}
-	req, err := http.NewRequestWithContext(context.TODO(), method, fmt.Sprintf("%v%v", c.addr, route), body)
+	req, err := http.NewRequest(method, fmt.Sprintf("%v%v", c.addr, route), body)
 	if err != nil {
 		panic(err)
 	}
@@ -45,7 +44,7 @@ func (c *Client) req(method string, route string, data, resp interface{}) error 
 	}
 	defer io.Copy(ioutil.Discard, r.Body)
 	defer r.Body.Close()
-	if r.StatusCode != http.StatusOK {
+	if r.StatusCode != 200 {
 		err, _ := ioutil.ReadAll(r.Body)
 		return errors.New(string(err))
 	}
@@ -167,18 +166,13 @@ func (c *Client) RemoveFromLimbo(txid types.TransactionID) (err error) {
 
 // Memo retrieves the memo for a transaction.
 func (c *Client) Memo(txid types.TransactionID) (memo []byte, err error) {
-	req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet,
-		fmt.Sprintf("http://%v/memos/%v", c.addr, txid.String()), nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.Get(fmt.Sprintf("http://%v/memos/%v", c.addr, txid.String()))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	data, _ := ioutil.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != 200 {
 		return nil, errors.New(string(data))
 	}
 	return data, nil
@@ -189,7 +183,7 @@ func (c *Client) Memo(txid types.TransactionID) (memo []byte, err error) {
 //
 // Memos are not stored on the blockchain. They exist only in the local wallet.
 func (c *Client) SetMemo(txid types.TransactionID, memo []byte) (err error) {
-	req, err := http.NewRequestWithContext(context.TODO(), "PUT", fmt.Sprintf("http://%v/memos/%v", c.addr, txid.String()), bytes.NewReader(memo))
+	req, err := http.NewRequest("PUT", fmt.Sprintf("http://%v/memos/%v", c.addr, txid.String()), bytes.NewReader(memo))
 	if err != nil {
 		panic(err)
 	}
@@ -199,7 +193,7 @@ func (c *Client) SetMemo(txid types.TransactionID, memo []byte) (err error) {
 	}
 	defer io.Copy(ioutil.Discard, r.Body)
 	defer r.Body.Close()
-	if r.StatusCode != http.StatusOK {
+	if r.StatusCode != 200 {
 		err, _ := ioutil.ReadAll(r.Body)
 		return errors.New(string(err))
 	}
@@ -509,5 +503,5 @@ func (c *protoBridge) UnconfirmedParents(txn types.Transaction) ([]types.Transac
 
 func (c *protoBridge) FeeEstimate() (minFee, maxFee types.Currency, err error) {
 	fee, err := c.Client.RecommendedFee()
-	return fee, fee.Mul64(3), err //nolint:gomnd
+	return fee, fee.Mul64(3), err
 }
