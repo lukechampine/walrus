@@ -3,20 +3,6 @@ on:
   pull_request:
 
 jobs:
-  lint:
-    timeout-minutes: 5
-    runs-on: ubuntu-latest
-    steps:
-    - 
-      name: Checkout
-      uses: actions/checkout@v2
-    - 
-      name: Lint
-      uses: golangci/golangci-lint-action@v2
-      with:
-        version: v1.39
-        skip-pkg-cache: true # set false if caching
-        skip-build-cache: true # set false if caching 
 
   test:
     timeout-minutes: 5
